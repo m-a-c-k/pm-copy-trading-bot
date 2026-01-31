@@ -4,7 +4,6 @@ Configuration Module for PM Copy Trading Bot
 
 import os
 from dataclasses import dataclass, field
-from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -12,18 +11,22 @@ load_dotenv()
 
 @dataclass
 class BlockchainConfig:
-    alchemy_api_key: str
-    proxy_wallet: str
-    private_key: str
-    rpc_url: str = "https://polygon-rpc.com"
+    alchemy_api_key: str = ""
+    proxy_wallet: str = ""
+    private_key: str = ""
+    
+    @property
+    def rpc_url(self) -> str:
+        if self.alchemy_api_key:
+            return f"https://polygon-mainnet.g.alchemy.com/v2/{self.alchemy_api_key}"
+        return "https://polygon-rpc.com"
     
     @classmethod
     def from_env(cls) -> "BlockchainConfig":
         return cls(
             alchemy_api_key=os.getenv("ALCHEMY_API_KEY", ""),
             proxy_wallet=os.getenv("PROXY_WALLET", ""),
-            private_key=os.getenv("PRIVATE_KEY", ""),
-            rpc_url=f"https://polygon-mainnet.g.alchemy.com/v2/{os.getenv('ALCHEMY_API_KEY', '')}"
+            private_key=os.getenv("PRIVATE_KEY", "")
         )
 
 
@@ -49,7 +52,6 @@ class CopyTradingConfig:
     user_addresses: list[str] = field(default_factory=list)
     trade_multiplier: float = 1.0
     fetch_interval: int = 1
-    min_trader_trades: int = 10
     copy_delay_seconds: float = 2.0
     
     @classmethod
@@ -59,22 +61,7 @@ class CopyTradingConfig:
             user_addresses=[a.strip() for a in addresses.split(",") if a.strip()],
             trade_multiplier=float(os.getenv("TRADE_MULTIPLIER", "1.0")),
             fetch_interval=int(os.getenv("FETCH_INTERVAL", "1")),
-            min_trader_trades=int(os.getenv("MIN_TRADER_TRADES", "10")),
             copy_delay_seconds=float(os.getenv("COPY_DELAY_SECONDS", "2.0"))
-        )
-
-
-@dataclass
-class DatabaseConfig:
-    mongo_uri: str
-    database_name: str = "pm-copy-trading-bot"
-    
-    @classmethod
-    def from_env(cls) -> "DatabaseConfig":
-        uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
-        return cls(
-            mongo_uri=uri,
-            database_name=os.getenv("MONGO_DATABASE", "pm-copy-trading-bot")
         )
 
 
@@ -101,7 +88,6 @@ class Config:
     blockchain: BlockchainConfig
     kelly: KellyConfig
     copy_trading: CopyTradingConfig
-    database: DatabaseConfig
     perfect_money: PerfectMoneyConfig
     
     @classmethod
@@ -113,7 +99,6 @@ class Config:
             blockchain=BlockchainConfig.from_env(),
             kelly=KellyConfig.from_env(),
             copy_trading=CopyTradingConfig.from_env(),
-            database=DatabaseConfig.from_env(),
             perfect_money=PerfectMoneyConfig.from_env()
         )
     
@@ -136,7 +121,7 @@ if __name__ == "__main__":
     config = Config.load()
     print(f"Wallet: {config.blockchain.proxy_wallet}")
     print(f"Bankroll: ${config.kelly.bankroll}")
-    print(f"Kelly Fraction: {config.kelly.kelly_fraction}x")
+    print(f"Kelly: {config.kelly.kelly_fraction}x")
     print(f"Traders: {len(config.copy_trading.user_addresses)}")
     valid, errors = config.validate()
     print(f"Validation: {'PASSED' if valid else 'FAILED'}")
