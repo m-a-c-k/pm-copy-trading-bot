@@ -115,26 +115,26 @@ class WhaleAnalyzer:
 
         self._cached_avg_wager = sum(t['size'] for t in valid_trades) / len(valid_trades)
 
-    def get_scaled_position(self, our_bankroll: float, trade_size: float) -> float:
+    def get_scaled_position(self, our_bankroll: float, trade_size: float, our_normal_size: float = 2.0) -> float:
         """
-        Calculate our position using accurate scaling:
-        our = (our_bankroll / whale_bankroll) * (trade_size / whale_avg_wager)
+        Calculate our position:
+        our = (trade_size / whale_avg) * our_normal_size
         
-        This means:
-        - If our bankroll is 10% of whale's, we bet 10% of their size
-        - If trade is 2x their avg, we bet 2x our scaled size
+        Our normal size = 2% of bankroll (default $2 for $100 bankroll)
+        
+        If whale bets 2x their avg, we bet 2x our normal size.
+        If whale bets half their avg, we bet half our normal size.
         """
         avg_wager = self.get_average_wager()
         
         if avg_wager > 0:
-            # Both ratios
-            bankroll_ratio = our_bankroll / self.estimated_whale_bankroll
-            size_ratio = trade_size / avg_wager
+            # Size multiplier: how aggressive is this trade vs whale's avg?
+            multiplier = trade_size / avg_wager
             
-            our_position = bankroll_ratio * trade_size * size_ratio
+            our_position = multiplier * our_normal_size
         else:
-            # No history - use straight scaling
-            our_position = (our_bankroll / self.estimated_whale_bankroll) * trade_size
+            # No history - use normal size
+            our_position = our_normal_size
         
         return our_position
 
@@ -212,27 +212,25 @@ class KalshiExecutor:
 
     def calculate_position_size(self, pm_trade: PMTradeData) -> float:
         """
-        Calculate our position size using accurate scaling:
-        our = (our_bankroll / whale_bankroll) * trade_size
+        Calculate our position using whale's trading patterns:
+        our = (trade_size / whale_avg) * our_normal_size
         
-        Scales both by relative bankroll AND by trade size vs whale's average.
+        Our normal size = 2% of our bankroll
         """
         trade_size = pm_trade.size
         if trade_size <= 0:
             return 0.0
 
+        # Our normal position (2% of bankroll)
+        our_normal_size = self.config.bankroll * (self.config.max_trade_percent / 100)
+
         our_size = self.whale_analyzer.get_scaled_position(
             our_bankroll=self.config.bankroll,
-            trade_size=trade_size
+            trade_size=trade_size,
+            our_normal_size=our_normal_size
         )
 
-        # Apply risk limits
-        risk_result = self.risk.check_position(
-            trader_wallet="whale",
-            proposed_size=our_size
-        )
-
-        return risk_result.final_position_size
+        return our_size
 
     def execute_copy_trade(self, pm_trade_data: dict, pm_trade: PMTradeData) -> TradeResult:
         """Execute a copy trade on Kalshi."""
