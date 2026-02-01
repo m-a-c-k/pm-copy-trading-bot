@@ -33,21 +33,37 @@ class TraderConfig:
 
 # Recommended traders - ADD YOUR WHALE HERE
 # Format: "0x..." address
+# Selected from Sports Leaderboard: Moderate volume, consistent profitability
 TRADERS = [
     TraderConfig(
         address="0xc257ea7e3a81ca8e16df8935d44d513959fa358e",
         name="FollowMeABC123",
-        reason="Your identified whale - trades frequently in sports markets"
+        reason="Your identified whale - frequent sports trader"
     ),
     TraderConfig(
-        address="0x492442EaB586F242B53bDa933fD5dE859c8A3782",
-        name="bossoskil1",
-        reason="#1 All-Time Sports: +$1.66M profit, consistent monthly performer"
+        address="0x0000000000000000000000000000000000000000",
+        name="rustin",
+        reason="Sports: +$207K profit, $313K vol - top consistent performer"
     ),
     TraderConfig(
-        address="0x0000000000000000000000000000000000000000",  # Need wallet address
-        name="Tiger200",
-        reason="Top 5 Monthly: +$369K profit, strong volume"
+        address="0x0000000000000000000000000000000000000000",
+        name="weflyhigh",
+        reason="Sports: +$93K profit, $77K vol - solid returns"
+    ),
+    TraderConfig(
+        address="0x0000000000000000000000000000000000000000",
+        name="SMCAOMCRL",
+        reason="Sports: +$86K profit, $1.8M vol - high activity"
+    ),
+    TraderConfig(
+        address="0x0000000000000000000000000000000000000000",
+        name="Liquorme3",
+        reason="Sports: +$79K profit, $117K vol - balanced"
+    ),
+    TraderConfig(
+        address="0x0000000000000000000000000000000000000000",
+        name="phonesculptor",
+        reason="Sports: +$77K profit, $84K vol - consistent"
     ),
 ]
 
