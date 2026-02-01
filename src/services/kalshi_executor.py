@@ -77,9 +77,9 @@ class TradeResult:
 class WhaleAnalyzer:
     """Analyze whale trading patterns to determine sizing."""
 
-    def __init__(self, window_size: int = 50, reference_bankroll: float = 10000.0):
+    def __init__(self, window_size: int = 50, estimated_whale_bankroll: float = 10000.0):
         self.window_size = window_size
-        self.reference_bankroll = reference_bankroll
+        self.estimated_whale_bankroll = estimated_whale_bankroll  # Assume whales have ~$10K
         self.trade_history: List[Dict] = []
         self._cached_avg_wager: float = 0.0
         self._last_calc_time: float = 0
@@ -115,13 +115,29 @@ class WhaleAnalyzer:
 
         self._cached_avg_wager = sum(t['size'] for t in valid_trades) / len(valid_trades)
 
-    def get_scaled_position(self, our_bankroll: float) -> float:
-        """Calculate our position by scaling whale's avg wager to our bankroll."""
+    def get_scaled_position(self, our_bankroll: float, trade_size: float) -> float:
+        """
+        Calculate our position using accurate scaling:
+        our = (our_bankroll / whale_bankroll) * (trade_size / whale_avg)
+        
+        This means:
+        - If our bankroll is 10% of whale's, we bet 10% of their size
+        - If trade is 2x their avg, we bet 2x our scaled size
+        """
         avg_wager = self.get_average_wager()
         if avg_wager <= 0:
             return 0.0
-        scaling = our_bankroll / self.reference_bankroll
-        return avg_wager * scaling
+        
+        # Scaling ratio: our_bankroll / whale_bankroll
+        scaling = our_bankroll / self.estimated_whale_bankroll
+        
+        # Position ratio: trade_size / whale_avg
+        size_ratio = trade_size / avg_wager if avg_wager > 0 else 1.0
+        
+        # Our position
+        our_position = scaling * trade_size
+        
+        return our_position
 
     def get_trade_stats(self, our_bankroll: float = 100.0) -> Dict:
         """Get trading statistics."""
@@ -130,7 +146,7 @@ class WhaleAnalyzer:
 
         sizes = [t.get('size', 0) for t in self.trade_history if t.get('size', 0) > 0]
         avg_wager = sum(sizes) / len(sizes) if sizes else 0.0
-        scaling = our_bankroll / self.reference_bankroll
+        scaling = our_bankroll / self.estimated_whale_bankroll
 
         return {
             "count": len(self.trade_history),
@@ -195,22 +211,23 @@ class KalshiExecutor:
                     key = f"{game_key}:{side}"
                     self.positions_by_side[key] = self.positions_by_side.get(key, 0) + 1
 
-    def _ensure_trade_log(self):
-        """Create trade log file if needed."""
-        os.makedirs(os.path.dirname(TRADE_LOG), exist_ok=True)
-        if not os.path.exists(TRADE_LOG):
-            with open(TRADE_LOG, 'w') as f:
-                json.dump([], f)
+    def calculate_position_size(self, pm_trade: PMTradeData) -> float:
+        """
+        Calculate our position size using accurate scaling:
+        our = (our_bankroll / whale_bankroll) * trade_size
+        
+        Scales both by relative bankroll AND by trade size vs whale's average.
+        """
+        trade_size = pm_trade.size
+        if trade_size <= 0:
+            return 0.0
 
-    def calculate_position_size(self, pm_trade: PMTradeData, whale_avg_percent: float) -> float:
-        """Calculate our position size based on whale's average %."""
-        if whale_avg_percent <= 0:
-            whale_avg_percent = 2.0  # Default to 2% if unknown
+        our_size = self.whale_analyzer.get_scaled_position(
+            our_bankroll=self.config.bankroll,
+            trade_size=trade_size
+        )
 
-        # Use whale's % of bankroll as our sizing factor
-        our_size = self.config.bankroll * (whale_avg_percent / 100)
-
-        # Apply Kelly/risk limits
+        # Apply risk limits
         risk_result = self.risk.check_position(
             trader_wallet="whale",
             proposed_size=our_size
@@ -259,11 +276,8 @@ class KalshiExecutor:
                 error=f"Max {self.config.max_same_side_per_market} same-side bet(s) per market reached"
             )
 
-        # Get whale's average wager %
-        whale_avg_percent = self.whale_analyzer.get_average_wager_percent()
-
-        # Calculate position size
-        position_size = self.calculate_position_size(pm_trade, whale_avg_percent)
+        # Calculate position size using whale's avg
+        position_size = self.calculate_position_size(pm_trade)
 
         if position_size < 1.0:
             return TradeResult(
