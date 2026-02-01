@@ -33,8 +33,13 @@ class KalshiCopyConfig:
     kelly_fraction: float = 0.5
     max_trade_percent: float = 2.0
     max_total_exposure: float = 30.0
-    max_positions_per_market: int = 1  # Max bets per game
-    max_same_side_per_market: int = 1  # Max same-side bets per game
+    max_positions_per_market: int = 1
+    max_same_side_per_market: int = 1
+    max_trades_per_hour: int = 10
+    max_trades_per_day: int = 50
+    min_trade_size: float = 1.0
+    max_single_trade_size: float = 10.0
+    cooldown_minutes: int = 30
     whale_avg_window: int = 50
     dry_run: bool = True
 
@@ -48,6 +53,11 @@ class KalshiCopyConfig:
             max_total_exposure=float(os.getenv("KALSHI_MAX_TOTAL_EXPOSURE", "30.0")),
             max_positions_per_market=int(os.getenv("MAX_POSITIONS_PER_MARKET", "1")),
             max_same_side_per_market=int(os.getenv("MAX_SAME_SIDE_PER_MARKET", "1")),
+            max_trades_per_hour=int(os.getenv("MAX_TRADES_PER_HOUR", "10")),
+            max_trades_per_day=int(os.getenv("MAX_TRADES_PER_DAY", "50")),
+            min_trade_size=float(os.getenv("MIN_TRADE_SIZE", "1.0")),
+            max_single_trade_size=float(os.getenv("MAX_SINGLE_TRADE_SIZE", "10.0")),
+            cooldown_minutes=int(os.getenv("COOLDOWN_MINUTES", "30")),
             whale_avg_window=int(os.getenv("KALSHI_WHALE_AVG_WINDOW", "50")),
             dry_run=os.getenv("DRY_RUN", "true").lower() == "true"
         )
