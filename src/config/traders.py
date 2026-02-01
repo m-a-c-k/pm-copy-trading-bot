@@ -39,6 +39,16 @@ TRADERS = [
         name="FollowMeABC123",
         reason="Your identified whale - trades frequently in sports markets"
     ),
+    TraderConfig(
+        address="0x492442EaB586F242B53bDa933fD5dE859c8A3782",
+        name="bossoskil1",
+        reason="#1 All-Time Sports: +$1.66M profit, consistent monthly performer"
+    ),
+    TraderConfig(
+        address="0x0000000000000000000000000000000000000000",  # Need wallet address
+        name="Tiger200",
+        reason="Top 5 Monthly: +$369K profit, strong volume"
+    ),
 ]
 
 # Traders to monitor (not yet approved)
