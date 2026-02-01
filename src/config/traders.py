@@ -51,14 +51,9 @@ TRADERS = [
         reason="Sports: +$86K profit, $1.8M vol - high activity trader"
     ),
     TraderConfig(
-        address="0x0000000000000000000000000000000000000000",
-        name="Liquorme3",
-        reason="Sports: +$79K profit, $117K vol - balanced"
-    ),
-    TraderConfig(
-        address="0x0000000000000000000000000000000000000000",
-        name="phonesculptor",
-        reason="Sports: +$77K profit, $84K vol - consistent"
+        address="0xafbacaeeda63f31202759eff7f8126e49adfe61b",
+        name="NewTrader",
+        reason="Added from leaderboard - sports trader"
     ),
 ]
 
