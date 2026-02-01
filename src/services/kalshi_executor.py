@@ -118,24 +118,20 @@ class WhaleAnalyzer:
     def get_scaled_position(self, our_bankroll: float, trade_size: float) -> float:
         """
         Calculate our position using accurate scaling:
-        our = (our_bankroll / whale_bankroll) * (trade_size / whale_avg)
-        
-        This means:
-        - If our bankroll is 10% of whale's, we bet 10% of their size
-        - If trade is 2x their avg, we bet 2x our scaled size
+        our = (our_bankroll / whale_bankroll) * trade_size
         """
-        avg_wager = self.get_average_wager()
-        if avg_wager <= 0:
-            return 0.0
-        
-        # Scaling ratio: our_bankroll / whale_bankroll
         scaling = our_bankroll / self.estimated_whale_bankroll
         
-        # Position ratio: trade_size / whale_avg
-        size_ratio = trade_size / avg_wager if avg_wager > 0 else 1.0
+        # If whale has history, use their avg for context
+        avg_wager = self.get_average_wager()
         
-        # Our position
-        our_position = scaling * trade_size
+        if avg_wager > 0:
+            # If trade is bigger than avg, scale up; smaller, scale down
+            size_ratio = trade_size / avg_wager
+            our_position = scaling * trade_size * size_ratio
+        else:
+            # No history - use straight scaling with assumed whale avg
+            our_position = scaling * trade_size
         
         return our_position
 
