@@ -33,6 +33,8 @@ class KalshiCopyConfig:
     kelly_fraction: float = 0.5
     max_trade_percent: float = 2.0
     max_total_exposure: float = 30.0
+    max_positions_per_market: int = 1  # Max bets per game
+    max_same_side_per_market: int = 1  # Max same-side bets per game
     whale_avg_window: int = 50
     dry_run: bool = True
 
@@ -44,6 +46,8 @@ class KalshiCopyConfig:
             kelly_fraction=float(os.getenv("KALSHI_KELLY_FRACTION", "0.5")),
             max_trade_percent=float(os.getenv("KALSHI_MAX_TRADE_PERCENT", "2.0")),
             max_total_exposure=float(os.getenv("KALSHI_MAX_TOTAL_EXPOSURE", "30.0")),
+            max_positions_per_market=int(os.getenv("MAX_POSITIONS_PER_MARKET", "1")),
+            max_same_side_per_market=int(os.getenv("MAX_SAME_SIDE_PER_MARKET", "1")),
             whale_avg_window=int(os.getenv("KALSHI_WHALE_AVG_WINDOW", "50")),
             dry_run=os.getenv("DRY_RUN", "true").lower() == "true"
         )
@@ -134,6 +138,34 @@ class KalshiExecutor:
             bankroll=self.config.bankroll
         )
         self._ensure_trade_log()
+        self._load_positions()
+
+    def _ensure_trade_log(self):
+        """Create trade log file if needed."""
+        os.makedirs(os.path.dirname(TRADE_LOG), exist_ok=True)
+        if not os.path.exists(TRADE_LOG):
+            with open(TRADE_LOG, 'w') as f:
+                json.dump([], f)
+
+    def _load_positions(self):
+        """Load existing positions from trade log."""
+        try:
+            with open(TRADE_LOG, 'r') as f:
+                trades = json.load(f)
+        except:
+            trades = []
+
+        self.positions_by_market: Dict[str, int] = {}
+        self.positions_by_side: Dict[str, int] = {}
+
+        for t in trades:
+            game_key = t.get('game_key', '')
+            side = t.get('kalshi_side', '')
+            if game_key:
+                self.positions_by_market[game_key] = self.positions_by_market.get(game_key, 0) + 1
+                if side:
+                    key = f"{game_key}:{side}"
+                    self.positions_by_side[key] = self.positions_by_side.get(key, 0) + 1
 
     def _ensure_trade_log(self):
         """Create trade log file if needed."""
@@ -173,6 +205,32 @@ class KalshiExecutor:
                 error="No matching Kalshi market found"
             )
 
+        # Check position limits
+        market_key = match.game_key
+        side_key = f"{market_key}:{match.kalshi_side}"
+
+        if self.positions_by_market.get(market_key, 0) >= self.config.max_positions_per_market:
+            return TradeResult(
+                success=False,
+                trade_id=None,
+                pm_trade=pm_trade_data,
+                kalshi_market=match,
+                position_size=0,
+                side=match.kalshi_side,
+                error=f"Max {self.config.max_positions_per_market} position(s) per market reached"
+            )
+
+        if self.positions_by_side.get(side_key, 0) >= self.config.max_same_side_per_market:
+            return TradeResult(
+                success=False,
+                trade_id=None,
+                pm_trade=pm_trade_data,
+                kalshi_market=match,
+                position_size=0,
+                side=match.kalshi_side,
+                error=f"Max {self.config.max_same_side_per_market} same-side bet(s) per market reached"
+            )
+
         # Get whale's average wager %
         whale_avg_percent = self.whale_analyzer.get_average_wager_percent()
 
@@ -197,6 +255,10 @@ class KalshiExecutor:
             print(f"  Kalshi: {match.kalshi_market_title}")
             print(f"  Side: {match.kalshi_side}")
             print(f"  Size: ${position_size:.2f}")
+            # Update position tracking for dry-run too
+            self.positions_by_market[match.game_key] = self.positions_by_market.get(match.game_key, 0) + 1
+            side_key = f"{match.game_key}:{match.kalshi_side}"
+            self.positions_by_side[side_key] = self.positions_by_side.get(side_key, 0) + 1
             return TradeResult(
                 success=True,
                 trade_id=f"dry_{int(time.time())}",
@@ -241,7 +303,7 @@ class KalshiExecutor:
             )
 
     def _log_trade(self, pm_trade: dict, match: MarketMatch, size: float, order_id: str):
-        """Log executed trade."""
+        """Log executed trade and update position tracking."""
         try:
             with open(TRADE_LOG, 'r') as f:
                 trades = json.load(f)
@@ -268,6 +330,11 @@ class KalshiExecutor:
 
         with open(TRADE_LOG, 'w') as f:
             json.dump(trades, f, indent=2)
+
+        # Update position tracking
+        self.positions_by_market[match.game_key] = self.positions_by_market.get(match.game_key, 0) + 1
+        side_key = f"{match.game_key}:{match.kalshi_side}"
+        self.positions_by_side[side_key] = self.positions_by_side.get(side_key, 0) + 1
 
     def process_whale_trades(self, whale_trades: List[dict]) -> List[TradeResult]:
         """Process a batch of whale trades."""

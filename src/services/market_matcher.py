@@ -385,6 +385,17 @@ class MarketMatcher:
     def _determine_kalshi_side(self, ks_market: Dict, pm_trade: PMTradeData) -> Optional[str]:
         """Determine which side (yes/no) to trade on Kalshi."""
         ks_title = ks_market.get('title', '').lower()
+
+        # Handle TOTALS markets (over/under)
+        if pm_trade.market_type == 'total':
+            # For totals: YES = over, NO = under
+            # PM side tells us if whale bet over or under
+            if 'over' in ks_title or 'o/u' in ks_title or 'total points' in ks_title:
+                # Kalshi totals are always YES=over
+                return 'yes' if pm_trade.side == 'yes' else 'no'
+            return None
+
+        # Handle WINNER/SPREAD markets
         team1, team2 = pm_trade.teams
 
         # Check which team is mentioned in the Kalshi market title
@@ -397,17 +408,8 @@ class MarketMatcher:
         if not ks_team:
             return None
 
-        # Determine side based on PM side and which team the market is for
-        # If PM bought YES (team A wins) and KS market is for team A, buy YES
-        # If PM bought YES and KS market is for team B, buy NO (bet against team A)
-        opposite_team = team2 if team1 == ks_team else team1
-
-        if pm_trade.side == 'yes':
-            # PM bets team wins → on KS, bet the same team
-            return 'yes'
-        else:
-            # PM bets team loses → on KS, bet the opposite team
-            return 'no'
+        # For winner/spread: match the side whale took
+        return pm_trade.side
 
     def _team_mentioned_in_title(self, team: str, title: str) -> bool:
         """Check if team is mentioned in market title."""
