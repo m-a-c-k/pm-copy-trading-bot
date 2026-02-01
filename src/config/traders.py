@@ -46,7 +46,7 @@ TRADERS = [
         reason="Sports: +$207K profit, $313K vol - top consistent performer"
     ),
     TraderConfig(
-        address="0x0000000000000000000000000000000000000000",
+        address="0x3b5c629f114098b0dee345fb78b7a3a013c7126e",
         name="weflyhigh",
         reason="Sports: +$93K profit, $77K vol - solid returns"
     ),
