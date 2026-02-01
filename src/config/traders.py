@@ -52,11 +52,6 @@ TRADERS = [
     ),
     TraderConfig(
         address="0x0000000000000000000000000000000000000000",
-        name="SMCAOMCRL",
-        reason="Sports: +$86K profit, $1.8M vol - high activity"
-    ),
-    TraderConfig(
-        address="0x0000000000000000000000000000000000000000",
         name="Liquorme3",
         reason="Sports: +$79K profit, $117K vol - balanced"
     ),
