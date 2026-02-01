@@ -215,7 +215,30 @@ class KalshiClient:
             api_client.set_kalshi_auth(self.config.api_key_id, key_path)
             portfolio_api = PortfolioApi(api_client)
 
-            resp = portfolio_api.get_portfolio()
+            resp = portfolio_api.get_balance()
+            os.unlink(key_path)
+
+            balance_cents = getattr(resp, 'balance', 0)
+            return float(balance_cents) / 100.0 if balance_cents else 0.0
+
+        except Exception:
+            return 0.0
+
+        try:
+            from kalshi_python import Configuration, PortfolioApi, ApiClient
+            import tempfile
+
+            pem = self.config.private_key_pem.replace('\\n', '\n')
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.pem', delete=False) as f:
+                f.write(pem)
+                key_path = f.name
+
+            config = Configuration(host=KALSHI_API)
+            api_client = ApiClient(config)
+            api_client.set_kalshi_auth(self.config.api_key_id, key_path)
+            portfolio_api = PortfolioApi(api_client)
+
+            resp = portfolio_api.get_balance()
             os.unlink(key_path)
 
             balance_cents = getattr(resp, 'balance_cents', 0)
@@ -223,6 +246,64 @@ class KalshiClient:
 
         except Exception:
             return 0.0
+
+    def get_positions(self) -> list:
+        """Get open positions."""
+        if not self.config.enabled:
+            return []
+
+        try:
+            from kalshi_python import Configuration, PortfolioApi, ApiClient
+            import tempfile
+
+            pem = self.config.private_key_pem.replace('\\n', '\n')
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.pem', delete=False) as f:
+                f.write(pem)
+                key_path = f.name
+
+            config = Configuration(host=KALSHI_API)
+            api_client = ApiClient(config)
+            api_client.set_kalshi_auth(self.config.api_key_id, key_path)
+            portfolio_api = PortfolioApi(api_client)
+
+            resp = portfolio_api.get_positions()
+            os.unlink(key_path)
+
+            positions = getattr(resp, 'positions', []) or []
+            return positions
+
+        except Exception as e:
+            print(f"Error fetching positions: {e}")
+            return []
+
+    def get_fills(self, limit: int = 50) -> list:
+        """Get recent fills/trades."""
+        if not self.config.enabled:
+            return []
+
+        try:
+            from kalshi_python import Configuration, PortfolioApi, ApiClient
+            import tempfile
+
+            pem = self.config.private_key_pem.replace('\\n', '\n')
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.pem', delete=False) as f:
+                f.write(pem)
+                key_path = f.name
+
+            config = Configuration(host=KALSHI_API)
+            api_client = ApiClient(config)
+            api_client.set_kalshi_auth(self.config.api_key_id, key_path)
+            portfolio_api = PortfolioApi(api_client)
+
+            resp = portfolio_api.get_fills(limit=limit)
+            os.unlink(key_path)
+
+            fills = getattr(resp, 'fills', []) or []
+            return fills
+
+        except Exception as e:
+            print(f"Error fetching fills: {e}")
+            return []
 
 
 if __name__ == "__main__":
