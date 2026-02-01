@@ -77,49 +77,67 @@ class TradeResult:
 class WhaleAnalyzer:
     """Analyze whale trading patterns to determine sizing."""
 
-    def __init__(self, window_size: int = 50):
+    def __init__(self, window_size: int = 50, reference_bankroll: float = 10000.0):
         self.window_size = window_size
+        self.reference_bankroll = reference_bankroll
         self.trade_history: List[Dict] = []
+        self._cached_avg_wager: float = 0.0
+        self._last_calc_time: float = 0
+        self._calc_interval: int = 300  # Recalculate every 5 minutes
 
     def add_trades(self, trades: List[Dict]):
         """Add whale trades to history."""
         self.trade_history.extend(trades)
-        # Keep only recent trades
         if len(self.trade_history) > self.window_size * 2:
             self.trade_history = self.trade_history[-self.window_size:]
 
     def get_average_wager(self) -> float:
-        """Calculate whale's average wager amount."""
+        """Calculate whale's average wager amount. Cached for efficiency."""
+        import time
+        now = time.time()
+
+        if not self._cached_avg_wager or (now - self._last_calc_time) > self._calc_interval:
+            self._recalculate_avg()
+            self._last_calc_time = now
+
+        return self._cached_avg_wager
+
+    def _recalculate_avg(self):
+        """Recalculate average wager from history."""
         if not self.trade_history:
-            return 0.0
+            self._cached_avg_wager = 0.0
+            return
 
         valid_trades = [t for t in self.trade_history if t.get('size', 0) > 0]
         if not valid_trades:
-            return 0.0
+            self._cached_avg_wager = 0.0
+            return
 
-        return sum(t['size'] for t in valid_trades) / len(valid_trades)
+        self._cached_avg_wager = sum(t['size'] for t in valid_trades) / len(valid_trades)
 
-    def get_average_wager_percent(self) -> float:
-        """Estimate whale's average % of bankroll per trade."""
+    def get_scaled_position(self, our_bankroll: float) -> float:
+        """Calculate our position by scaling whale's avg wager to our bankroll."""
         avg_wager = self.get_average_wager()
         if avg_wager <= 0:
             return 0.0
-        # Estimate whale bankroll from their trade sizes
-        # Assuming they typically bet 1-5% of bankroll
-        estimated_bankroll = avg_wager / 0.02  # Assume 2% typical
-        return (avg_wager / estimated_bankroll) * 100
+        scaling = our_bankroll / self.reference_bankroll
+        return avg_wager * scaling
 
-    def get_trade_stats(self) -> Dict:
+    def get_trade_stats(self, our_bankroll: float = 100.0) -> Dict:
         """Get trading statistics."""
         if not self.trade_history:
-            return {"count": 0, "avg_size": 0, "total_volume": 0}
+            return {"count": 0, "avg_size": 0, "total_volume": 0, "scaling_factor": 0, "our_position": 0}
 
         sizes = [t.get('size', 0) for t in self.trade_history if t.get('size', 0) > 0]
+        avg_wager = sum(sizes) / len(sizes) if sizes else 0.0
+        scaling = our_bankroll / self.reference_bankroll
+
         return {
             "count": len(self.trade_history),
-            "avg_size": sum(sizes) / len(sizes) if sizes else 0,
+            "avg_size": avg_wager,
             "total_volume": sum(sizes),
-            "avg_percent": self.get_average_wager_percent()
+            "scaling_factor": scaling,
+            "our_position": avg_wager * scaling
         }
 
 

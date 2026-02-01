@@ -142,12 +142,20 @@ def main():
             if new_trades:
                 print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Found {len(new_trades)} new whale trade(s)")
 
+                sports_trades = []
                 for trade in new_trades:
                     market_title = trade.get("market", {}).get("title", "Unknown")
                     size = trade.get("amount", 0)
-                    print(f"  • {market_title[:50]}... (${size})")
+                    
+                    # Check if sports
+                    pm_trade = executor.matcher.parse_pm_trade(trade)
+                    if pm_trade and pm_trade.sport:
+                        sports_trades.append(trade)
+                        print(f"  🏈 {market_title[:50]}... (${size})")
+                    else:
+                        print(f"  ⏭️ {market_title[:50]}... (non-sports, skipped)")
 
-                results = executor.process_whale_trades(new_trades)
+                results = executor.process_whale_trades(sports_trades)
                 success_count = sum(1 for r in results if r.success)
                 print(f"  → Copied {success_count}/{len(results)} trades to Kalshi")
 

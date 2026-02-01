@@ -43,18 +43,34 @@ class PMTradeData:
 class MarketMatcher:
     """Match Polymarket markets to Kalshi markets."""
 
-    # Sport mappings
+    # Sport mappings - detected from PM market title/slug
     SPORT_MAP = {
+        # Football
         "nfl": "nfl",
         "football": "nfl",
+        "super bowl": "nfl",
+        "cfb": "cfb",
+        "college football": "cfb",
+        # Basketball
         "nba": "nba",
         "basketball": "nba",
         "cbb": "cbb",
         "college basketball": "cbb",
-        "cfb": "cfb",
-        "college football": "cfb",
+        "ncaab": "cbb",
+        # Hockey
         "nhl": "nhl",
         "hockey": "nhl",
+        # Baseball
+        "mlb": "mlb",
+        "baseball": "mlb",
+        # Combat
+        "ufc": "ufc",
+        "mma": "ufc",
+        "boxing": "ufc",
+        # Golf
+        "pga": "pga",
+        "golf": "pga",
+        "masters": "pga",
     }
 
     # Market type patterns
@@ -130,6 +146,10 @@ class MarketMatcher:
             if not token_id:
                 return None
 
+            # Skip zero-value trades (likely small or losing positions)
+            if size <= 0:
+                return None
+
             # Determine side (buy yes = yes, sell yes = no, etc.)
             if side == 'buy':
                 outcome = trade_data.get('outcome', 'yes').lower()
@@ -171,7 +191,7 @@ class MarketMatcher:
         return sport, teams, market_type, line
 
     def _detect_sport(self, title: str, slug: str) -> str:
-        """Detect sport from title or slug."""
+        """Detect sport from title or slug. Returns empty string for non-sports."""
         text = f"{title} {slug}".lower()
 
         for pattern, sport in self.SPORT_MAP.items():
@@ -190,7 +210,7 @@ class MarketMatcher:
         elif 'nhl' in slug:
             return 'nhl'
 
-        return 'unknown'
+        return ""  # Empty = not a sports market
 
     def _extract_teams(self, title: str, slug: str, sport: str) -> Tuple[str, str]:
         """Extract team abbreviations from title or slug."""
