@@ -41,7 +41,7 @@ TRADERS = [
         reason="Your identified whale - frequent sports trader"
     ),
     TraderConfig(
-        address="0x0000000000000000000000000000000000000000",
+        address="0xaa075924e1dc7cff3b9fab67401126338c4d2125",
         name="rustin",
         reason="Sports: +$207K profit, $313K vol - top consistent performer"
     ),
