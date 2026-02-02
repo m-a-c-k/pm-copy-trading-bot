@@ -46,7 +46,7 @@ TRADERS = [
     ),
     TraderConfig(
         address="0xd0b4c4c020abdc88ad9a884f999f3d8cff8ffed6",
-        name="NewNHLWhale",
+        name="mrsparky",
         reason="Active NHL trader - Maple Leafs, Senators, Under markets"
     ),
 ]
