@@ -49,6 +49,11 @@ TRADERS = [
         name="mrsparky",
         reason="Active NHL trader - Maple Leafs, Senators, Under markets"
     ),
+    TraderConfig(
+        address="0x5c3a1a602848565bb16165fcd460b00c3d43020b",
+        name="coreyLahey",
+        reason="Active sports trader - added for more coverage"
+    ),
 ]
 
 # Traders to monitor (not yet approved)

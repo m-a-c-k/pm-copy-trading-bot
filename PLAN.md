@@ -1,137 +1,82 @@
-# Polymarket Copy Trading Bot - Session Plan
+# Kalshi Copy Trading Bot - Session Plan
 
 ## What Was Built
 
 ### Core Architecture
-- **Bot Location:** `/Users/alexandrastarnes/Documents/mack/github/pm-copy-trading-bot/`
-- **Purpose:** Monitor trader `FollowMeABC123` and copy trades proportionally
+- **Bot Location:** `/home/mck/Desktop/projects/pm-copy-trading-bot`
+- **Purpose:** Monitor Polymarket whales and copy trades to Kalshi
 
 ### Key Files
 ```
 pm-copy-trading-bot/
+├── run_kalshi_copy.py            # Main bot entry point ⭐ RUN THIS
 ├── src/
-│   ├── config/config.py              # Environment config loader
+│   ├── config/
+│   │   ├── config.py             # Environment config loader
+│   │   └── traders.py            # Trader configurations
 │   └── services/
-│       ├── kelly_calculator.py       # Kelly Criterion sizing
-│       ├── perfect_money_bridge.py   # PM integration (unused)
-│       ├── trader_discovery.py       # Find/copy traders
-│       ├── risk_manager.py           # Risk limits (2% per trade, 10% per trader)
-│       ├── trade_monitor.py          # Monitor trader wallets
-│       ├── trade_executor.py         # CLOB order placement ⭐ FIXED
-│       ├── clob_client.py            # Polymarket CLOB API client
-│       ├── position_scaler.py        # Proportional sizing
-│       └── whale_scaler.py           # Whale-aware scaling
-├── monitor_whale.py                  # Active whale monitoring script ⭐ RUN THIS
-├── test_clob.py                      # Test CLOB order placement
-├── .env                              # Credentials
-└── requirements.txt
+│       ├── kalshi_client.py      # Kalshi API wrapper
+│       ├── kalshi_executor.py    # Trade execution
+│       ├── market_matcher.py     # PM → Kalshi market matching
+│       ├── kelly_calculator.py   # Kelly Criterion sizing
+│       └── risk_manager.py       # Risk limits
+├── kalshi_key.pem                # RSA private key for Kalshi
+└── .env                          # Credentials
 ```
 
-### Credentials (in .env)
-```
-PROXY_WALLET=0x3854c129cd856ee518bf0661792e01ef1f2f586a
-PRIVATE_KEY=911b44fec3bb4360e2288db5810a2cbceb4725465c438802083cb1ebf01b6d73
-ALCHEMY_API_KEY=5K6CVc1EkJsLj9TLjktjs
-POLYMARKET_API_KEY=019c1644-035a-78fe-9e0b-d7781eada06c
-POLYMARKET_SECRET_KEY=xOsBVtdl11EfwMa3yTa3V2uQ2IPLX3dY5u0MVGiY_Z8=
-POLYMARKET_PASSPHRASE=c462b805e329736e1c6677d3c87bca95c4fee903839bdfe652b54fcfb26d5293
-BANKROLL=433
-```
+### Monitored Traders
+| Address | Name | Notes |
+|---------|------|-------|
+| 0xc257... | FollowMeABC123 | Original whale |
+| 0xaa07... | rustin | +$207K profit |
+| 0x3b5c... | SMCAOMCRL | +$86K profit, high volume |
+| 0xafba... | NewTrader | Sports trader |
 
-### The Whale (FollowMeABC123)
-- **Address:** `0xc257ea7e3a81ca8e16df8935d44d513959fa358e`
-- **Positions Value:** $1,500,000
-- **All-time Profit:** $1,181,829
-- **Avg Bet:** ~$100
-- **Strategy:** Small bets, high frequency
-
-### Position Sizing (Proportional)
-| Their Bet | Our Copy | % of Bank |
-|-----------|----------|-----------|
-| $25 | $2.17 | 0.5% |
-| $100 | $8.66 | 2% |
-| $500 | $43.30 | 10% |
-| $1,000+ | $64.95 | 15% cap |
-
-## What Was Fixed
-
-### trade_executor.py
-- ✅ Proper EIP-712 signing implementation
-- ✅ Alchemy RPC connection (Connected: `True`)
-- ✅ Nonce retrieval from CLOB API
-- ✅ Order signing with domain separator
-- ✅ Cloudflare headers (User-Agent, Origin, Referer)
+## Position Sizing (Kelly Criterion)
+- Bankroll: Dynamically fetched from Kalshi balance
+- Kelly Fraction: 0.5x (conservative)
+- Max per trade: 2% of bankroll
+- Max per market: 1 position
 
 ## Current Status
 
 | Item | Status |
 |------|--------|
-| Monitoring | ✅ Ready |
-| Position Sizing | ✅ Working |
-| Order Signing | ✅ Fixed |
-| Actual Order Placement | ⚠️ Needs non-US VPN |
-
-## Next Steps (Priority)
-
-### 1. Test Order Placement (HIGH)
-Connect through non-US VPN and run:
-```bash
-cd /Users/alexandrastarnes/Documents/mack/github/pm-copy-trading-bot
-python3 test_clob.py
-```
-
-Expected output:
-```
-✅ Order placed successfully!
-```
-
-### 2. Start Monitoring (MEDIUM)
-```bash
-cd /Users/alexandrastarnes/Documents/mack/github/pm-copy-trading-bot
-python3 monitor_whale.py
-```
-
-This will:
-- Show current bankroll and sizing table
-- Poll FollowMeABC123's trades every 3 seconds
-- Alert when they trade with copy recommendation
-
-### 3. Manual Testing (Optional)
-Place a small $1-5 trade on polymarket.com manually to:
-- Verify wallet works
-- Check USDC balance
-- Test the full flow
+| Multi-trader monitoring | ✅ Working |
+| Dynamic bankroll fetch | ✅ Working |
+| Market matching | ✅ Working |
+| Live trading | ✅ Running |
 
 ## Commands Reference
 
 ```bash
-# Test CLOB order placement
-python3 test_clob.py
+# Run in live mode (recommended)
+python3 run_kalshi_copy.py --live
 
-# Start monitoring FollowMeABC123
-python3 monitor_whale.py
+# Run in dry-run mode (testing)
+python3 run_kalshi_copy.py --dry-run
 
-# Check dependencies
-pip install -r requirements.txt
+# Check status
+python3 run_kalshi_copy.py --status
 
-# View recent trades from whale
-curl "https://data-api.polymarket.com/activity?user=0xc257ea7e3a81ca8e16df8935d44d513959fa358e"
+# Run in screen session
+screen -S kalshi_copy_bot
+python3 run_kalshi_copy.py --live
+# Ctrl+A D to detach
+
+# Attach to running session
+screen -r kalshi_copy_bot
 ```
 
-## If Issues Arise
+## Configuration (.env)
 
-### "Module not found: services"
-Run from project root with PYTHONPATH:
 ```bash
-PYTHONPATH=/Users/alexandrastarnes/Documents/mack/github/pm-copy-trading-bot python3 test_clob.py
+KALSHI_API_KEY_ID=your_key
+KALSHI_PRIVATE_KEY_PEM=/path/to/kalshi_key.pem
+COPY_TO_KALSHI=true
+KALSHI_KELLY_FRACTION=0.5
+KALSHI_MAX_TRADE_PERCENT=2.0
 ```
-
-### "Cloudflare blocked" or 403
-VPN is not connected or using US IP. Connect non-US VPN.
-
-### "Connection refused" or "API error"
-Check API key in `.env` is correct.
 
 ## GitHub
 - **Repo:** https://github.com/m-a-c-k/pm-copy-trading-bot
-- **Commits:** 8 (all pushed)

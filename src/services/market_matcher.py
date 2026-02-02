@@ -110,35 +110,53 @@ class MarketMatcher:
         self._by_game_key: Dict[str, List[Dict]] = {}
 
         for tagged_key, markets in self.kalshi_markets.items():
-            sport, game_key = self._parse_tagged_key(tagged_key)
+            sport, market_type, game_key = self._parse_tagged_key(tagged_key)
 
             if sport not in self._by_sport:
                 self._by_sport[sport] = {}
             if game_key not in self._by_sport[sport]:
                 self._by_sport[sport][game_key] = []
+            
+            # Add market type to each market dict
+            for m in markets:
+                m['market_type'] = market_type
+            
             self._by_sport[sport][game_key].extend(markets)
-
             self._by_game_key[game_key] = markets
 
-    def _parse_tagged_key(self, tagged_key: str) -> Tuple[str, str]:
-        """Parse 'sport:game_key' into components."""
-        if ':' in tagged_key:
-            parts = tagged_key.split(':', 1)
-            return parts[0], parts[1]
-        return "unknown", tagged_key
+    def _parse_tagged_key(self, tagged_key: str) -> Tuple[str, str, str]:
+        """Parse 'sport:market_type:game_key' into components."""
+        parts = tagged_key.split(':')
+        if len(parts) >= 3:
+            return parts[0], parts[1], ':'.join(parts[2:])
+        elif len(parts) == 2:
+            return parts[0], 'winner', parts[1]
+        return "unknown", "winner", tagged_key
 
     def parse_pm_trade(self, trade_data: dict) -> Optional[PMTradeData]:
         """
         Parse raw Polymarket trade data into structured format.
 
         Args:
-            trade_data: Dict from Polymarket activity API
+            trade_data: Dict from Polymarket activity API (flat or nested market)
 
         Returns:
             PMTradeData or None if parsing fails
         """
         try:
             market_info = trade_data.get('market', {})
+            
+            # Handle both flat (API) and nested structures
+            if market_info:
+                title = (market_info.get('title', '') or market_info.get('question', '')).lower()
+                slug = (market_info.get('slug', '') or '').lower()
+                market_id = market_info.get('id', '')
+            else:
+                # Flat structure - fields at top level
+                title = (trade_data.get('title', '') or trade_data.get('question', '')).lower()
+                slug = (trade_data.get('slug', '') or '').lower()
+                market_id = trade_data.get('conditionId', trade_data.get('id', ''))
+            
             token_id = trade_data.get('tokenId', '') or trade_data.get('clobTokenId', '')
             side = trade_data.get('side', 'buy').lower()
             size = float(trade_data.get('amount', 0) or trade_data.get('size', 0))
@@ -146,11 +164,11 @@ class MarketMatcher:
             if not token_id:
                 return None
 
-            # Skip zero-value trades (likely small or losing positions)
+            # Skip zero-value trades
             if size <= 0:
                 return None
 
-            # Determine side (buy yes = yes, sell yes = no, etc.)
+            # Determine side
             if side == 'buy':
                 outcome = trade_data.get('outcome', 'yes').lower()
             else:
@@ -158,16 +176,12 @@ class MarketMatcher:
 
             side = 'yes' if outcome == 'yes' else 'no'
 
-            # Parse market info
-            title = (market_info.get('title', '') or market_info.get('question', '')).lower()
-            slug = (market_info.get('slug', '') or '').lower()
-
             sport, teams, market_type, line = self._parse_market_title(title, slug)
 
             event_date = self._extract_date(slug, title)
 
             return PMTradeData(
-                market_id=market_info.get('id', ''),
+                market_id=market_id,
                 token_id=token_id,
                 side=side,
                 size=size,
@@ -359,8 +373,8 @@ class MarketMatcher:
         for ks_market in ks_markets:
             ks_title = ks_market.get('title', '').lower()
 
-            # Match market type
-            ks_market_type = self._detect_market_type(ks_title)
+            # Use stored market type (from _build_index)
+            ks_market_type = ks_market.get('market_type', 'winner')
             if ks_market_type != pm_trade.market_type:
                 continue
 

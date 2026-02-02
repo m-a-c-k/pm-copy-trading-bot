@@ -19,7 +19,8 @@ Copy Polymarket whale trades to Kalshi prediction markets.
 - 🎯 **Market Matching** - PM ↔ Kalshi with fuzzy team matching
 - 📈 **All Market Types** - Moneyline, Spreads, Totals
 - 🛡️ **Position Limits** - Max 1 position per market
-- 📝 **Dry-Run Mode** - Test without real money
+- 👥 **Multi-Trader Support** - Monitor and copy 4 top traders
+- 💰 **Dynamic Bankroll** - Auto-fetches from Kalshi balance
 
 ### Quick Start
 
@@ -60,11 +61,12 @@ python3 run_kalshi_copy.py --live
 | `KALSHI_API_KEY_ID` | Kalshi API key | required |
 | `KALSHI_PRIVATE_KEY_PEM` | Path to RSA key | required |
 | `COPY_TO_KALSHI` | Enable copy mode | false |
-| `KALSHI_BANKROLL` | Your bankroll | 100 |
 | `KALSHI_KELLY_FRACTION` | Kelly multiplier | 0.5 |
 | `KALSHI_MAX_TRADE_PERCENT` | Max % per trade | 2.0 |
 | `MAX_POSITIONS_PER_MARKET` | Max bets/game | 1 |
 | `MAX_SAME_SIDE_PER_MARKET` | Max same-side bets | 1 |
+
+> **Note:** Bankroll is automatically fetched from your Kalshi balance.
 
 ## PM Copy Mode (Original)
 

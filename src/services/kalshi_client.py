@@ -73,7 +73,9 @@ class KalshiClient:
                 if not game_key:
                     continue
 
-                tagged_key = f"{sport}:{game_key}"
+                # Detect market type and include in key
+                market_type = self._detect_market_type(title)
+                tagged_key = f"{sport}:{market_type}:{game_key}"
 
                 if ',' in title:
                     continue
@@ -90,6 +92,7 @@ class KalshiClient:
                     'no': no_ask,
                     'id': ticker,
                     'event_ticker': event_ticker,
+                    'market_type': market_type,
                 })
 
         except Exception:
@@ -103,30 +106,156 @@ class KalshiClient:
         if not event_ticker:
             return None
 
-        parts = event_ticker.upper().split('-')
-        if len(parts) < 2:
+        # Format: KXNHLGAME-26FEB04EDMCGY-EDM or KXNBAGAME-26JAN17LAL-BOS
+        # Pattern: {DATE}{TEAM1}{TEAM2}-{TEAM_OUTCOME}
+        # Example: 26FEB04EDMCGY-EDM -> edm-cgy (teams from 'EDMCGY' split to EDM+CGY)
+        
+        # Remove series prefix if present (e.g., "KXNHLGAME-")
+        clean_ticker = event_ticker
+        for prefix in ['KXNFLGAME-', 'KXNFLSPREAD-', 'KXNFLTOTAL-',
+                       'KXCFBGAME-', 'KXCFBSPREAD-', 'KXCFBTOTAL-',
+                       'KXNCAAMBGAME-', 'KXNCAAMBSPREAD-', 'KXNCAAMBTOTAL-',
+                       'KXNBAGAME-', 'KXNBASPREAD-', 'KXNBATOTAL-',
+                       'KXNHLGAME-', 'KXNHLSPREAD-', 'KXNHLTOTAL-']:
+            if clean_ticker.startswith(prefix):
+                clean_ticker = clean_ticker[len(prefix):]
+                break
+
+        # Extract teams from format: 26FEB04EDMCGY-EDM
+        date_match = re.match(r'^(\d{2}[A-Z]{3}\d{2})(.*)$', clean_ticker)
+        if not date_match:
             return None
-
-        date_teams = parts[-1]
-        teams_only = re.sub(r'^\d{2}[A-Z]{3}\d{2}', '', date_teams)
-
-        if len(teams_only) < 4:
-            return None
-
-        if len(teams_only) == 6:
-            team1 = teams_only[:3].lower()
-            team2 = teams_only[3:].lower()
-            return '-'.join(sorted([team1, team2]))
-        elif len(teams_only) == 5:
-            team1 = teams_only[:3].lower()
-            team2 = teams_only[3:].lower()
-            return '-'.join(sorted([team1, team2]))
-        elif len(teams_only) == 7:
-            team1 = teams_only[:4].lower()
-            team2 = teams_only[4:].lower()
+        
+        teams_part = date_match.group(2)  # e.g., "EDMCGY-EDM" or "EDM-CGY"
+        
+        # Collect all team codes
+        all_team_codes = []
+        
+        # Split by '-' first
+        team_segments = teams_part.split('-')
+        
+        for segment in team_segments:
+            segment = segment.strip()
+            if len(segment) == 3:
+                # Already a team code
+                all_team_codes.append(segment.upper())
+            elif len(segment) == 6:
+                # Concatenated teams like 'EDMCGY' -> split to ['EDM', 'CGY']
+                all_team_codes.append(segment[:3].upper())
+                all_team_codes.append(segment[3:].upper())
+            elif len(segment) == 5:
+                # Could be 3+2 or 2+3 split, try both
+                all_team_codes.append(segment[:3].upper())
+                all_team_codes.append(segment[2:].upper())
+            elif len(segment) >= 6:
+                # Longer segment, try to find 3-letter codes within
+                # Look for pattern like 'EDMCGY' split at common boundaries
+                for i in range(3, len(segment)-2):
+                    if segment[i:i+3].isalpha() and segment[:i].isalpha() and segment[i+3:].isalpha():
+                        all_team_codes.append(segment[:i].upper())
+                        all_team_codes.append(segment[i:i+3].upper())
+                        all_team_codes.append(segment[i+3:].upper())
+                        break
+                else:
+                    # Fallback: just take first two 3-letter sequences
+                    matches = re.findall(r'[A-Za-z]{3}', segment)
+                    all_team_codes.extend([m.upper() for m in matches[:2]])
+        
+        # Get unique teams
+        unique_teams = []
+        for t in all_team_codes:
+            if t not in unique_teams:
+                unique_teams.append(t)
+        
+        if len(unique_teams) >= 2:
+            team1 = unique_teams[0][:3].lower()
+            team2 = unique_teams[1][:3].lower()
             return '-'.join(sorted([team1, team2]))
 
         return None
+
+        # Format: KXNFLGAME-26FEB04EDMCGY-EDM or KXNBAGAME-26JAN17LAL-BOS
+        # Pattern: {DATE}{TEAM1}{TEAM2}-{TEAM_OUTCOME}
+        # Example: 26FEB04EDMCGY-EDM -> edm-cgy
+        
+        # Remove series prefix if present (e.g., "KXNHLGAME-")
+        clean_ticker = event_ticker
+        for prefix in ['KXNFLGAME-', 'KXNFLSPREAD-', 'KXNFLTOTAL-',
+                       'KXCFBGAME-', 'KXCFBSPREAD-', 'KXCFBTOTAL-',
+                       'KXNCAAMBGAME-', 'KXNCAAMBSPREAD-', 'KXNCAAMBTOTAL-',
+                       'KXNBAGAME-', 'KXNBASPREAD-', 'KXNBATOTAL-',
+                       'KXNHLGAME-', 'KXNHLSPREAD-', 'KXNHLTOTAL-']:
+            if clean_ticker.startswith(prefix):
+                clean_ticker = clean_ticker[len(prefix):]
+                break
+
+        # Extract teams from format: 26FEB04EDMCGY-EDM
+        # Date pattern at start: \d{2}[A-Z]{3}\d{2}
+        date_match = re.match(r'^(\d{2}[A-Z]{3}\d{2})(.*)$', clean_ticker)
+        if not date_match:
+            return None
+        
+        teams_part = date_match.group(2)  # e.g., "EDMCGY-EDM" or "EDM-CGY"
+        
+        # Split by '-' to get individual teams
+        team_parts = teams_part.split('-')
+        if len(team_parts) >= 2:
+            # Extract 3-letter team codes
+            teams = []
+            for part in team_parts:
+                part = part.strip()
+                # Find all 3+ letter sequences
+                team_matches = re.findall(r'[A-Za-z]{3,}', part)
+                teams.extend(team_matches)
+            
+            if len(teams) >= 2:
+                team1 = teams[0][:3].lower()
+                team2 = teams[1][:3].lower()
+                return '-'.join(sorted([team1, team2]))
+
+        # Fallback: try to find 3-letter codes in the string
+        all_teams = re.findall(r'[A-Za-z]{3,}', teams_part)
+        if len(all_teams) >= 2:
+            team1 = all_teams[0][:3].lower()
+            team2 = all_teams[1][:3].lower()
+            return '-'.join(sorted([team1, team2]))
+
+        return None
+
+    def _detect_market_type(self, title: str) -> str:
+        """Detect market type from title."""
+        import re
+        title_lower = title.lower()
+        
+        SPREAD_PATTERNS = [
+            r'spread',
+            r'wins by',
+            r' - \d+\.?\d*',
+        ]
+        
+        TOTAL_PATTERNS = [
+            r'total',
+            r'o/u',
+            r'over/under',
+            r'over \d+\.?\d*',
+            r'under \d+\.?\d*',
+        ]
+        
+        WINNER_PATTERNS = [
+            r'winner',
+            r'wins$',
+            r'beat',
+            r'vs\.?\s',
+        ]
+        
+        if any(p in title_lower for p in SPREAD_PATTERNS):
+            return 'spread'
+        elif any(p in title_lower for p in TOTAL_PATTERNS):
+            return 'total'
+        elif any(p in title_lower for p in WINNER_PATTERNS):
+            return 'winner'
+        
+        return 'winner'
 
     def get_all_markets(self) -> dict:
         """Fetch all sports markets from Kalshi."""
@@ -143,6 +272,9 @@ class KalshiClient:
             ("KXNBAGAME", "nba"),
             ("KXNBASPREAD", "nba"),
             ("KXNBATOTAL", "nba"),
+            ("KXNHLGAME", "nhl"),
+            ("KXNHLSPREAD", "nhl"),
+            ("KXNHLTOTAL", "nhl"),
         ]
 
         all_games = {}
