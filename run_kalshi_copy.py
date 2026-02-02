@@ -153,17 +153,35 @@ def main():
                 print(f"\n[{datetime.now().strftime('%H:%M:%S')}] Found {len(new_trades)} new whale trade(s)")
 
                 sports_trades = []
+                non_sports_trades = []
                 for trade in new_trades:
-                    market_title = trade.get("market", {}).get("title", "Unknown")
-                    size = trade.get("amount", 0)
+                    # API returns flat structure - check both nested and flat
+                    market_info = trade.get("market", {})
+                    market_title = (market_info.get("title") or trade.get("title") or trade.get("question") or "Unknown")
+                    slug = (market_info.get("slug") or trade.get("slug") or "")
+                    size = float(trade.get("amount") or trade.get("size") or 0)
+                    
+                    # Create a normalized trade dict for parsing
+                    normalized_trade = {
+                        **trade,
+                        "market": {
+                            "title": market_title,
+                            "slug": slug,
+                            "id": market_info.get("id") or trade.get("conditionId", "")
+                        }
+                    }
                     
                     # Check if sports
-                    pm_trade = executor.matcher.parse_pm_trade(trade)
+                    pm_trade = executor.matcher.parse_pm_trade(normalized_trade)
                     if pm_trade and pm_trade.sport:
-                        sports_trades.append(trade)
+                        sports_trades.append(normalized_trade)
                         print(f"  🏈 {market_title[:50]}... (${size})")
                     else:
+                        non_sports_trades.append(market_title)
                         print(f"  ⏭️ {market_title[:50]}... (non-sports, skipped)")
+
+                if non_sports_trades:
+                    print(f"  ↪ Skipped {len(non_sports_trades)} non-sports markets")
 
                 results = executor.process_whale_trades(sports_trades)
                 success_count = sum(1 for r in results if r.success)
