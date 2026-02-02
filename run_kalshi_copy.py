@@ -144,7 +144,7 @@ def main():
 
             new_trades = []
             for trade in trades:
-                trade_id = trade.get("id") or trade.get("orderId")
+                trade_id = trade.get("conditionId") or trade.get("transactionHash") or trade.get("id")
                 if trade_id and trade_id not in seen_trades:
                     seen_trades.add(trade_id)
                     new_trades.append(trade)
