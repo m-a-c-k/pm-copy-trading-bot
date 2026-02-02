@@ -31,29 +31,23 @@ class TraderConfig:
     reason: Optional[str] = None
 
 
-# Recommended traders - ADD YOUR WHALE HERE
-# Format: "0x..." address
-# Selected from Sports Leaderboard: Moderate volume, consistent profitability
+# Recommended traders to copy
+# Active traders trading sports available on Kalshi (NFL, NBA, CBB, NHL, CFB)
 TRADERS = [
     TraderConfig(
         address="0xc257ea7e3a81ca8e16df8935d44d513959fa358e",
         name="FollowMeABC123",
-        reason="Your identified whale - frequent sports trader"
+        reason="Your identified whale - frequent NHL/NBA trader"
     ),
     TraderConfig(
         address="0xaa075924e1dc7cff3b9fab67401126338c4d2125",
         name="rustin",
-        reason="Sports: +$207K profit, $313K vol - top consistent performer"
+        reason="Sports: +$207K profit, $313K vol - top consistent NHL trader"
     ),
     TraderConfig(
-        address="0x3b5c629f114098b0dee345fb78b7a3a013c7126e",
-        name="SMCAOMCRL",
-        reason="Sports: +$86K profit, $1.8M vol - high activity trader"
-    ),
-    TraderConfig(
-        address="0xafbacaeeda63f31202759eff7f8126e49adfe61b",
-        name="NewTrader",
-        reason="Added from leaderboard - sports trader"
+        address="0xd0b4c4c020abdc88ad9a884f999f3d8cff8ffed6",
+        name="NewNHLWhale",
+        reason="Active NHL trader - Maple Leafs, Senators, Under markets"
     ),
 ]
 
