@@ -27,8 +27,9 @@ from src.services.market_matcher import MarketMatcher
 from src.services.kelly_calculator import KellyCalculator
 from src.services.risk_manager import RiskManager
 
+from src.config.traders import get_active_traders
+
 POLYMARKET_ACTIVITY_API = "https://data-api.polymarket.com/activity"
-WHALE_ADDRESS = "0xc257ea7e3a81ca8e16df8935d44d513959fa358e"
 FETCH_INTERVAL = 3
 
 
@@ -115,7 +116,10 @@ def main():
     print("PM COPY TRADING BOT - KALSHI MODE")
     print("=" * 60)
     print(f"Mode: {'DRY RUN' if dry_run else 'LIVE TRADING'}")
-    print(f"Whale: {WHALE_ADDRESS[:16]}...")
+    traders = get_active_traders()
+    print(f"Traders: {len(traders)}")
+    for t in traders:
+        print(f"  - {t[:12]}...")
     print(f"Interval: {FETCH_INTERVAL}s")
     print("-" * 60)
 
@@ -127,10 +131,16 @@ def main():
 
     print("Monitoring for whale trades...")
     seen_trades = set()
+    scan_count = 0
+    spinner = "|/-\\"
 
     try:
         while True:
-            trades = fetch_whale_trades(WHALE_ADDRESS, limit=20)
+            scan_count += 1
+            all_trades = []
+            for trader in traders:
+                trades = fetch_whale_trades(trader, limit=20)
+                all_trades.extend(trades)
 
             new_trades = []
             for trade in trades:
@@ -158,6 +168,8 @@ def main():
                 results = executor.process_whale_trades(sports_trades)
                 success_count = sum(1 for r in results if r.success)
                 print(f"  → Copied {success_count}/{len(results)} trades to Kalshi")
+            else:
+                print(f"[{datetime.now().strftime('%H:%M:%S')}] Scanning... ({scan_count} scans, {len(seen_trades)} seen) ", end="\r")
 
             time.sleep(FETCH_INTERVAL)
 

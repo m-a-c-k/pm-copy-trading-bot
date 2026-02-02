@@ -45,9 +45,20 @@ class KalshiCopyConfig:
 
     @classmethod
     def from_env(cls) -> "KalshiCopyConfig":
+        bankroll_env = os.getenv("KALSHI_BANKROLL", "")
+        if bankroll_env:
+            bankroll = float(bankroll_env)
+        else:
+            kalshi_config = KalshiConfig.from_env()
+            if kalshi_config.enabled:
+                client = KalshiClient(kalshi_config)
+                bankroll = client.get_balance()
+            else:
+                bankroll = 100.0
+
         return cls(
             enabled=os.getenv("COPY_TO_KALSHI", "").lower() == "true",
-            bankroll=float(os.getenv("KALSHI_BANKROLL", "100")),
+            bankroll=bankroll,
             kelly_fraction=float(os.getenv("KALSHI_KELLY_FRACTION", "0.5")),
             max_trade_percent=float(os.getenv("KALSHI_MAX_TRADE_PERCENT", "2.0")),
             max_total_exposure=float(os.getenv("KALSHI_MAX_TOTAL_EXPOSURE", "30.0")),
