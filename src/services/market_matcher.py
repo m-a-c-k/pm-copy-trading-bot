@@ -157,9 +157,17 @@ class MarketMatcher:
                 slug = (trade_data.get('slug', '') or '').lower()
                 market_id = trade_data.get('conditionId', trade_data.get('id', ''))
             
-            token_id = trade_data.get('tokenId', '') or trade_data.get('clobTokenId', '')
+            # PM API uses conditionId/asset, fallback to tokenId for compatibility
+            token_id = (
+                trade_data.get('tokenId') or 
+                trade_data.get('clobTokenId') or 
+                trade_data.get('conditionId', '') or 
+                trade_data.get('asset', '')
+            )
             side = trade_data.get('side', 'buy').lower()
-            size = float(trade_data.get('amount', 0) or trade_data.get('size', 0))
+            
+            # PM API uses 'size' or 'usdcSize'
+            size = float(trade_data.get('size', 0) or trade_data.get('usdcSize', 0) or trade_data.get('amount', 0))
 
             if not token_id:
                 return None
@@ -168,11 +176,11 @@ class MarketMatcher:
             if size <= 0:
                 return None
 
-            # Determine side
-            if side == 'buy':
-                outcome = trade_data.get('outcome', 'yes').lower()
+            # Determine side - handle outcomeIndex (0=yes, 1=no) or outcome string
+            if 'outcomeIndex' in trade_data:
+                outcome = 'yes' if trade_data.get('outcomeIndex', 0) == 0 else 'no'
             else:
-                outcome = trade_data.get('outcome', 'no').lower()
+                outcome = trade_data.get('outcome', 'yes').lower()
 
             side = 'yes' if outcome == 'yes' else 'no'
 
@@ -192,7 +200,7 @@ class MarketMatcher:
                 event_date=event_date
             )
 
-        except Exception:
+        except Exception as e:
             return None
 
     def _parse_market_title(self, title: str, slug: str) -> Tuple[str, Tuple[str, str], str, Optional[float]]:
