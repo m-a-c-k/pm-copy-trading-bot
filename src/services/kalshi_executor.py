@@ -60,17 +60,17 @@ class KalshiCopyConfig:
             enabled=os.getenv("COPY_TO_KALSHI", "").lower() == "true",
             bankroll=bankroll,
             kelly_fraction=float(os.getenv("KALSHI_KELLY_FRACTION", "0.5")),
-            max_trade_percent=float(os.getenv("KALSHI_MAX_TRADE_PERCENT", "2.0")),
+            max_trade_percent=float(os.getenv("KALSHI_MAX_TRADE_PERCENT", "5.0")),
             max_total_exposure=float(os.getenv("KALSHI_MAX_TOTAL_EXPOSURE", "30.0")),
             max_positions_per_market=int(os.getenv("MAX_POSITIONS_PER_MARKET", "1")),
             max_same_side_per_market=int(os.getenv("MAX_SAME_SIDE_PER_MARKET", "1")),
-            max_trades_per_hour=int(os.getenv("MAX_TRADES_PER_HOUR", "10")),
+            max_trades_per_hour=int(os.getenv("MAX_TRADES_PER_HOUR", "15")),
             max_trades_per_day=int(os.getenv("MAX_TRADES_PER_DAY", "50")),
             min_trade_size=float(os.getenv("MIN_TRADE_SIZE", "1.0")),
-            max_single_trade_size=float(os.getenv("MAX_SINGLE_TRADE_SIZE", "10.0")),
+            max_single_trade_size=float(os.getenv("MAX_SINGLE_TRADE_SIZE", "25.0")),
             cooldown_minutes=int(os.getenv("COOLDOWN_MINUTES", "30")),
             whale_avg_window=int(os.getenv("KALSHI_WHALE_AVG_WINDOW", "50")),
-            dry_run=os.getenv("DRY_RUN", "true").lower() == "true"
+            dry_run=os.getenv("DRY_RUN", "false").lower() == "true"
         )
 
 
@@ -86,84 +86,46 @@ class TradeResult:
 
 
 class WhaleAnalyzer:
-    """Analyze whale trading patterns to determine sizing."""
-
-    def __init__(self, window_size: int = 50, estimated_whale_bankroll: float = 10000.0):
+    """Analyze whale trading patterns for sizing."""
+    
+    def __init__(self, window_size: int = 50, estimated_whale_bankroll: float = 0.0):
         self.window_size = window_size
-        self.estimated_whale_bankroll = estimated_whale_bankroll  # Assume whales have ~$10K
-        self.trade_history: List[Dict] = []
-        self._cached_avg_wager: float = 0.0
-        self._last_calc_time: float = 0
-        self._calc_interval: int = 300  # Recalculate every 5 minutes
-
+        # 0 means auto-estimate from trades
+        self._estimated_whale_bankroll = estimated_whale_bankroll if estimated_whale_bankroll > 0 else None
+        self.trade_history = []
+        self.trade_history = []
+    
     def add_trades(self, trades: List[Dict]):
-        """Add whale trades to history."""
+        """Add new trades to history."""
         self.trade_history.extend(trades)
-        if len(self.trade_history) > self.window_size * 2:
-            self.trade_history = self.trade_history[-self.window_size:]
-
-    def get_average_wager(self) -> float:
-        """Calculate whale's average wager amount. Cached for efficiency."""
-        import time
-        now = time.time()
-
-        if not self._cached_avg_wager or (now - self._last_calc_time) > self._calc_interval:
-            self._recalculate_avg()
-            self._last_calc_time = now
-
-        return self._cached_avg_wager
-
-    def _recalculate_avg(self):
-        """Recalculate average wager from history."""
-        if not self.trade_history:
-            self._cached_avg_wager = 0.0
-            return
-
-        valid_trades = [t for t in self.trade_history if t.get('size', 0) > 0]
-        if not valid_trades:
-            self._cached_avg_wager = 0.0
-            return
-
-        self._cached_avg_wager = sum(t['size'] for t in valid_trades) / len(valid_trades)
-
-    def get_scaled_position(self, our_bankroll: float, trade_size: float, our_normal_size: float = 2.0) -> float:
-        """
-        Calculate our position:
-        our = (trade_size / whale_avg) * our_normal_size
-        
-        Our normal size = 2% of bankroll (default $2 for $100 bankroll)
-        
-        If whale bets 2x their avg, we bet 2x our normal size.
-        If whale bets half their avg, we bet half our normal size.
-        """
-        avg_wager = self.get_average_wager()
-        
-        if avg_wager > 0:
-            # Size multiplier: how aggressive is this trade vs whale's avg?
-            multiplier = trade_size / avg_wager
-            
-            our_position = multiplier * our_normal_size
-        else:
-            # No history - use normal size
-            our_position = our_normal_size
-        
-        return our_position
-
-    def get_trade_stats(self, our_bankroll: float = 100.0) -> Dict:
-        """Get trading statistics."""
-        if not self.trade_history:
-            return {"count": 0, "avg_size": 0, "total_volume": 0, "scaling_factor": 0, "our_position": 0}
-
+        # Keep only recent trades
+        self.trade_history = self.trade_history[-self.window_size:]
+    
+    def get_stats(self, our_bankroll: float) -> Dict:
+        """Get whale statistics and calculate scaling."""
         sizes = [t.get('size', 0) for t in self.trade_history if t.get('size', 0) > 0]
         avg_wager = sum(sizes) / len(sizes) if sizes else 0.0
-        scaling = our_bankroll / self.estimated_whale_bankroll
+        
+        # Dynamic whale bankroll estimation
+        # Assume whale bets 2-3% of bankroll (conservative Kelly)
+        if avg_wager > 0 and self._estimated_whale_bankroll is None:
+            # If whale bets $100 on avg, assume $4K-$5K bankroll (2-2.5%)
+            estimated_whale_bankroll = avg_wager / 0.025
+        elif self._estimated_whale_bankroll:
+            estimated_whale_bankroll = self._estimated_whale_bankroll
+        else:
+            # Fallback: assume $10K whale bankroll
+            estimated_whale_bankroll = 10000.0
+        
+        scaling = our_bankroll / estimated_whale_bankroll
 
         return {
             "count": len(self.trade_history),
             "avg_size": avg_wager,
             "total_volume": sum(sizes),
             "scaling_factor": scaling,
-            "our_position": avg_wager * scaling
+            "our_position": avg_wager * scaling,
+            "whale_bankroll_est": estimated_whale_bankroll
         }
 
 
@@ -434,7 +396,7 @@ class KalshiExecutor:
             "enabled": self.config.enabled,
             "dry_run": self.config.dry_run,
             "bankroll": self.config.bankroll,
-            "whale_stats": self.whale_analyzer.get_trade_stats(),
+            "whale_stats": self.whale_analyzer.get_stats(self.config.bankroll),
             "balance": self.client.get_balance()
         }
 

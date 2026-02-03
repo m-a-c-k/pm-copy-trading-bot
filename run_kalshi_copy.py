@@ -110,7 +110,7 @@ def main():
                 print(f"  Error: {result.error}")
         sys.exit(0)
 
-    dry_run = not args.live or config.dry_run
+    dry_run = not args.live and config.dry_run
 
     print("=" * 60)
     print("PM COPY TRADING BOT - KALSHI MODE")

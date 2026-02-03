@@ -236,14 +236,22 @@ class MarketMatcher:
 
     def _extract_teams(self, title: str, slug: str, sport: str) -> Tuple[str, str]:
         """Extract team abbreviations from title or slug."""
-        # Try slug first: "nfl-buf-den-2026-01-17" → ("buf", "den")
+        # Try slug first: "nhl-tor-cal-2026-01-17" → ("tor", "cal")
+        extracted_teams = None
         if slug:
             parts = slug.lower().split('-')
             if len(parts) >= 3:
                 team1 = parts[1].lower()
                 team2 = parts[2].lower()
                 if len(team1) >= 2 and len(team2) >= 2:
-                    return (team1, team2)
+                    extracted_teams = (team1, team2)
+
+        # Normalize extracted teams using aliases
+        if extracted_teams:
+            team1, team2 = extracted_teams
+            normalized = self._normalize_team_code(team1, team2, sport)
+            if normalized:
+                return normalized
 
         # Try title with team aliases
         for canonical, aliases in self._get_team_aliases(sport).items():
@@ -255,6 +263,25 @@ class MarketMatcher:
                                 return (alias, alias2)
 
         return ("", "")
+
+    def _normalize_team_code(self, team1: str, team2: str, sport: str) -> Optional[Tuple[str, str]]:
+        """Normalize team codes using alias mapping."""
+        aliases = self._get_team_aliases(sport)
+        
+        # Build reverse mapping: alias -> canonical
+        alias_to_canonical = {}
+        for canonical, alias_set in aliases.items():
+            for alias in alias_set:
+                alias_to_canonical[alias.lower()] = canonical.lower()
+
+        # Normalize each team
+        norm_team1 = alias_to_canonical.get(team1.lower(), team1)
+        norm_team2 = alias_to_canonical.get(team2.lower(), team2)
+
+        # Return sorted canonical names (e.g., 'calgary', 'toronto')
+        if norm_team1 and norm_team2:
+            return (norm_team1, norm_team2)
+        return None
 
     def _get_team_aliases(self, sport: str) -> dict:
         """Get team aliases for sport."""
