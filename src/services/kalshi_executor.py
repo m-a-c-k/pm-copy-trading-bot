@@ -409,25 +409,10 @@ def create_executor(dry_run: bool = True) -> KalshiExecutor:
     kalshi_config = KalshiConfig.from_env()
     client = KalshiClient(kalshi_config)
     
-    # Lazily load markets on first use (for faster startup)
-    # Markets will be fetched when first trade is detected
-    matcher = MarketMatcher({})  # Empty initially
+    # Markets loaded lazily on first use (for faster startup)
+    matcher = MarketMatcher({})
     
-    executor = KalshiExecutor(client, matcher, config)
-    
-    # Fetch markets in background
-    import threading
-    def fetch_markets():
-        try:
-            markets = client.get_all_markets()
-            executor.matcher = MarketMatcher(markets)
-        except Exception:
-            pass
-    
-    thread = threading.Thread(target=fetch_markets, daemon=True)
-    thread.start()
-    
-    return executor
+    return KalshiExecutor(client, matcher, config)
 
 
 if __name__ == "__main__":
