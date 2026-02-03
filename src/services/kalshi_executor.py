@@ -183,6 +183,17 @@ class KalshiExecutor:
                     key = f"{game_key}:{side}"
                     self.positions_by_side[key] = self.positions_by_side.get(key, 0) + 1
 
+    def _load_markets(self):
+        """Load Kalshi markets if not already loaded."""
+        try:
+            markets = self.client.get_all_markets()
+            if markets:
+                # Update matcher with new markets
+                from src.services.market_matcher import MarketMatcher
+                self.matcher = MarketMatcher(markets)
+        except Exception:
+            pass
+
     def calculate_position_size(self, pm_trade: PMTradeData) -> float:
         """
         Calculate our position using whale's trading patterns:
@@ -193,6 +204,10 @@ class KalshiExecutor:
         trade_size = pm_trade.size
         if trade_size <= 0:
             return 0.0
+
+        # Refresh markets if empty
+        if not self.matcher.kalshi_markets:
+            self._load_markets()
 
         # Our normal position (2% of bankroll)
         our_normal_size = self.config.bankroll * (self.config.max_trade_percent / 100)
