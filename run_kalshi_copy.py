@@ -124,9 +124,11 @@ def main():
     print("-" * 60)
 
     executor = create_executor(dry_run=dry_run)
-    status = executor.get_status()
-    print(f"Bankroll: ${status['bankroll']}")
-    print(f"Kalshi Balance: ${status['balance']}")
+    
+    # Skip slow initial balance check - show basic info
+    print("-" * 60)
+    print(f"Bankroll: ${executor.config.bankroll}")
+    print(f"Mode: {'DRY RUN' if dry_run else 'LIVE TRADING'}")
     print()
 
     print("Monitoring for whale trades...")
