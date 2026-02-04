@@ -95,6 +95,7 @@ TEAM_ALIASES: Dict[str, Set[str]] = {
     "pit": {"pittsburgh", "pit", "penguins"},
     "nyi": {"new york islanders", "nyi", "islanders"},
     "nyr": {"new york rangers", "nyr", "rangers"},
+    "njd": {"new jersey devils", "njd", "devils", "nj"},
     "phi": {"philadelphia", "phi", "flyers"},
     "wsh": {"washington", "wsh", "capitals", "capitals"},
     "car": {"carolina", "car", "hurricanes"},

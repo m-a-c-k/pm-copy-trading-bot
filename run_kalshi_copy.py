@@ -173,11 +173,15 @@ def main():
                         }
                     }
                     
+                    # Add trader address for tracking
+                    trader_address = trade.get("maker") or trade.get("user") or trade.get("address") or "unknown"
+                    normalized_trade["trader_address"] = trader_address
+                    
                     # Check if sports
                     pm_trade = executor.matcher.parse_pm_trade(normalized_trade)
                     if pm_trade and pm_trade.sport:
                         sports_trades.append(normalized_trade)
-                        print(f"  🏈 {market_title[:50]}... (${size})")
+                        print(f"  🏈 {market_title[:50]}... (${size}) from {trader_address[:10]}...")
                     else:
                         non_sports_trades.append(market_title)
                         print(f"  ⏭️ {market_title[:50]}... (non-sports, skipped)")

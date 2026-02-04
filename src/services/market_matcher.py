@@ -253,35 +253,115 @@ class MarketMatcher:
             if normalized:
                 return normalized
 
-        # Try title with team aliases
+        # Try title with team aliases - return canonical 3-letter codes
         for canonical, aliases in self._get_team_aliases(sport).items():
-            if len(aliases) >= 2:
-                for i, alias in enumerate(aliases):
-                    if alias in title:
-                        for alias2 in list(aliases)[i+1:]:
-                            if alias2 in title:
-                                return (alias, alias2)
+            # Find which aliases from this team appear in title
+            found_alias = None
+            for alias in aliases:
+                if alias in title.lower():
+                    found_alias = alias
+                    break
+            
+            if found_alias:
+                # Look for a second team
+                for canonical2, aliases2 in self._get_team_aliases(sport).items():
+                    if canonical2 != canonical:
+                        for alias2 in aliases2:
+                            if alias2 in title.lower():
+                                # Return 3-letter canonical codes
+                                code1 = canonical if len(canonical) == 3 else self._get_3letter_code(canonical, sport)
+                                code2 = canonical2 if len(canonical2) == 3 else self._get_3letter_code(canonical2, sport)
+                                return (code1, code2)
 
         return ("", "")
 
     def _normalize_team_code(self, team1: str, team2: str, sport: str) -> Optional[Tuple[str, str]]:
-        """Normalize team codes using alias mapping."""
+        """Normalize team codes using alias mapping.
+        
+        For NHL, use 3-letter codes directly.
+        For other sports, use canonical names.
+        """
         aliases = self._get_team_aliases(sport)
         
-        # Build reverse mapping: alias -> canonical
+        # Build reverse mapping: alias -> canonical (for non-NHL)
         alias_to_canonical = {}
         for canonical, alias_set in aliases.items():
             for alias in alias_set:
                 alias_to_canonical[alias.lower()] = canonical.lower()
 
-        # Normalize each team
-        norm_team1 = alias_to_canonical.get(team1.lower(), team1)
-        norm_team2 = alias_to_canonical.get(team2.lower(), team2)
+        # For ALL sports, extract 3-letter codes from aliases
+        # Get all 3-letter codes from canonical names and aliases
+        three_letter_codes = set()
+        for canonical in aliases.keys():
+            if len(canonical) == 3:
+                three_letter_codes.add(canonical.lower())
+        
+        # Also check aliases for 3-letter codes
+        for alias_set in aliases.values():
+            for alias in alias_set:
+                if len(alias) == 3:
+                    three_letter_codes.add(alias.lower())
+        
+        # Find which 3-letter code matches
+        t1 = team1.lower()
+        t2 = team2.lower()
+        
+        # Use exact match for 3-letter codes first
+        if t1 in three_letter_codes:
+            norm_team1 = t1
+        else:
+            # Try to find canonical, then extract 3-letter from it
+            canonical1 = alias_to_canonical.get(t1, t1)
+            norm_team1 = canonical1 if len(canonical1) == 3 else self._get_3letter_from_canonical(canonical1, aliases)
+            
+        if t2 in three_letter_codes:
+            norm_team2 = t2
+        else:
+            canonical2 = alias_to_canonical.get(t2, t2)
+            norm_team2 = canonical2 if len(canonical2) == 3 else self._get_3letter_from_canonical(canonical2, aliases)
 
-        # Return sorted canonical names (e.g., 'calgary', 'toronto')
+        # Return sorted
         if norm_team1 and norm_team2:
             return (norm_team1, norm_team2)
         return None
+
+    def _get_3letter_code(self, canonical: str, sport: str) -> str:
+        """Extract 3-letter code from canonical name or aliases."""
+        # If already 3 letters, return as-is
+        if len(canonical) == 3:
+            return canonical.lower()
+        
+        # Look through aliases for 3-letter code
+        aliases = self._get_team_aliases(sport)
+        for alias_set in aliases.values():
+            for alias in alias_set:
+                if len(alias) == 3:
+                    return alias.lower()
+        
+        # Fallback: return first 3 chars
+        return canonical[:3].lower()
+
+    def _get_3letter_from_canonical(self, canonical: str, aliases: dict) -> str:
+        """Extract 3-letter code from a canonical team name using aliases."""
+        canonical_lower = canonical.lower()
+        
+        # Direct match - canonical is already 3 letters
+        if len(canonical_lower) == 3 and canonical_lower in aliases:
+            return canonical_lower
+        
+        # Find the canonical entry that matches
+        for can_name, alias_set in aliases.items():
+            if can_name.lower() == canonical_lower or canonical_lower in alias_set:
+                # Found it! Return the canonical name if it's 3 letters
+                if len(can_name) == 3:
+                    return can_name.lower()
+                # Otherwise look for a 3-letter alias
+                for alias in alias_set:
+                    if len(alias) == 3:
+                        return alias.lower()
+        
+        # Ultimate fallback: first 3 chars
+        return canonical_lower[:3]
 
     def _get_team_aliases(self, sport: str) -> dict:
         """Get team aliases for sport."""

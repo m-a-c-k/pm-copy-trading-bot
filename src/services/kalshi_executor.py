@@ -45,16 +45,20 @@ class KalshiCopyConfig:
 
     @classmethod
     def from_env(cls) -> "KalshiCopyConfig":
-        bankroll_env = os.getenv("KALSHI_BANKROLL", "")
-        if bankroll_env:
-            bankroll = float(bankroll_env)
-        else:
-            kalshi_config = KalshiConfig.from_env()
-            if kalshi_config.enabled:
+        kalshi_config = KalshiConfig.from_env()
+        bankroll = 100.0  # Default fallback
+        
+        if kalshi_config.enabled:
+            try:
                 client = KalshiClient(kalshi_config)
-                bankroll = client.get_balance()
-            else:
-                bankroll = 100.0
+                balance = client.get_balance()
+                if balance and balance > 0:
+                    bankroll = balance
+                    print(f"Loaded Kalshi balance: ${bankroll:.2f}")
+                else:
+                    print("Kalshi balance is $0 or unavailable, using default $100")
+            except Exception as e:
+                print(f"Could not fetch Kalshi balance: {e}, using default $100")
 
         return cls(
             enabled=os.getenv("COPY_TO_KALSHI", "").lower() == "true",
@@ -127,6 +131,23 @@ class WhaleAnalyzer:
             "our_position": avg_wager * scaling,
             "whale_bankroll_est": estimated_whale_bankroll
         }
+    
+    def get_scaled_position(self, our_bankroll: float, trade_size: float, our_normal_size: float) -> float:
+        """Calculate scaled position size based on whale's wager relative to their avg."""
+        stats = self.get_stats(our_bankroll)
+        avg_wager = stats["avg_size"]
+        
+        if avg_wager <= 0:
+            # No history, use normal size
+            return our_normal_size
+        
+        # Scale: if whale bets 2x their avg, we bet 2x our normal
+        ratio = trade_size / avg_wager
+        our_size = our_normal_size * ratio
+        
+        # Cap at max single trade size (25% of bankroll default)
+        max_size = our_bankroll * 0.25
+        return min(our_size, max_size)
 
 
 class KalshiExecutor:
@@ -276,8 +297,10 @@ class KalshiExecutor:
             )
 
         # Execute trade (or dry run)
+        trader_address = pm_trade_data.get("trader_address", "unknown")
         if self.config.dry_run:
             print(f"\n[DRY RUN] Would execute:")
+            print(f"  Trader: {trader_address[:12]}...")
             print(f"  PM: {pm_trade_data.get('market', {}).get('title', 'Unknown')}")
             print(f"  Kalshi: {match.kalshi_market_title}")
             print(f"  Side: {match.kalshi_side}")
@@ -297,6 +320,13 @@ class KalshiExecutor:
             )
 
         # Real execution
+        print(f"\n✓ Executed copy trade:")
+        print(f"  Trader: {trader_address[:12]}...")
+        print(f"  PM: {pm_trade_data.get('market', {}).get('title', 'Unknown')}")
+        print(f"  Kalshi: {match.kalshi_market_title}")
+        print(f"  Side: {match.kalshi_side}")
+        print(f"  Size: ${position_size:.2f}")
+
         result = self.client.place_order(
             market_ticker=match.kalshi_market_id,
             side=match.kalshi_side,
@@ -396,7 +426,19 @@ class KalshiExecutor:
             return False
 
         cutoff = time.time() - (cooldown_minutes * 60)
-        recent = [t for t in trades if t.get("timestamp", 0) > cutoff]
+        recent = []
+        for t in trades:
+            ts = t.get("timestamp", 0)
+            try:
+                ts_float = float(ts)
+            except (ValueError, TypeError):
+                try:
+                    from datetime import datetime
+                    ts_float = datetime.fromisoformat(ts.replace('Z', '+00:00')).timestamp()
+                except:
+                    continue
+            if ts_float > cutoff:
+                recent.append(t)
 
         for t in recent:
             if t.get("pm_slug", "").endswith(pm_trade.teams[0]) and \
@@ -424,8 +466,11 @@ def create_executor(dry_run: bool = True) -> KalshiExecutor:
     kalshi_config = KalshiConfig.from_env()
     client = KalshiClient(kalshi_config)
     
-    # Markets loaded lazily on first use (for faster startup)
-    matcher = MarketMatcher({})
+    # Load markets at startup for proper matching
+    print("Loading Kalshi markets...")
+    markets = client.get_all_markets()
+    print(f"Loaded {len(markets)} markets from Kalshi")
+    matcher = MarketMatcher(markets)
     
     return KalshiExecutor(client, matcher, config)
 
