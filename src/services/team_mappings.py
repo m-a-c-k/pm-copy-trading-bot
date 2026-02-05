@@ -115,6 +115,22 @@ TEAM_ALIASES: Dict[str, Set[str]] = {
     "villanova": {"villanova"},
     "texas": {"texas"},
     "kentucky": {"kentucky"},
+    # More CBB teams
+    "ucla": {"ucla"},
+    "unc": {"unc", "north carolina", "carolina"},
+    "arsenal": {"arsenal"},
+    "creighton": {"creighton"},
+    "marquette": {"marquette"},
+    "xavier": {"xavier"},
+    "notre dame": {"notre dame", "notredame"},
+    "wichita state": {"wichita state", "wichita"},
+    "nevada": {"nevada"},
+    "utah state": {"utah state", "utahstate"},
+    "san diego state": {"san diego state", "sdsu"},
+    "houston": {"houston", "hou"},
+    "memphis": {"memphis"},
+    "cincinnati": {"cincinnati"},
+    "connecticut": {"connecticut", "uconn"},
 }
 
 _CANONICAL_FROM_ALIAS: Dict[str, str] = {}

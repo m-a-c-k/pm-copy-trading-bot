@@ -57,6 +57,8 @@ class MarketMatcher:
         "cbb": "cbb",
         "college basketball": "cbb",
         "ncaab": "cbb",
+        "men's basketball": "cbb",
+        "ncaam": "cbb",
         # Hockey
         "nhl": "nhl",
         "hockey": "nhl",
@@ -232,6 +234,17 @@ class MarketMatcher:
         for pattern, sport in self.SPORT_MAP.items():
             if pattern in text:
                 return sport
+
+        # Check for CBB team names in title
+        from src.services.team_mappings import TEAM_ALIASES
+        cbb_teams = ['uconn', 'purdue', 'tennessee', 'arizona', 'gonzaga', 'duke', 
+                     'kansas', 'baylor', 'villanova', 'texas', 'kentucky', 'ucla', 
+                     'unc', 'creighton', 'marquette', 'xavier', 'notre dame',
+                     'wichita state', 'san diego state', 'memphis', 'cincinnati',
+                     'connecticut', 'houston', 'nevada', 'utah state']
+        for team in cbb_teams:
+            if team in text:
+                return 'cbb'
 
         # Fallback: check slug patterns
         if 'nfl' in slug:
