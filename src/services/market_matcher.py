@@ -44,21 +44,22 @@ class MarketMatcher:
     """Match Polymarket markets to Kalshi markets."""
 
     # Sport mappings - detected from PM market title/slug
+    # MORE SPECIFIC patterns must come BEFORE generic ones!
     SPORT_MAP = {
-        # Football
-        "nfl": "nfl",
-        "football": "nfl",
+        # Football - specific before generic
         "super bowl": "nfl",
         "cfb": "cfb",
         "college football": "cfb",
-        # Basketball
-        "nba": "nba",
-        "basketball": "nba",
+        "nfl": "nfl",
+        "football": "nfl",
+        # Basketball - specific BEFORE generic "basketball"
         "cbb": "cbb",
         "college basketball": "cbb",
         "ncaab": "cbb",
-        "men's basketball": "cbb",
         "ncaam": "cbb",
+        "men's basketball": "cbb",
+        "nba": "nba",
+        "basketball": "nba",
         # Hockey
         "nhl": "nhl",
         "hockey": "nhl",
@@ -66,12 +67,12 @@ class MarketMatcher:
         "mlb": "mlb",
         "baseball": "mlb",
         # Soccer
-        "soccer": "soccer",
         "premier": "soccer",
         "la liga": "soccer",
         "serie a": "soccer",
         "bundesliga": "soccer",
         "ligue 1": "soccer",
+        "soccer": "soccer",
         "fc": "soccer",
         "united": "soccer",
         "city": "soccer",
@@ -237,11 +238,32 @@ class MarketMatcher:
 
         # Check for CBB team names in title
         from src.services.team_mappings import TEAM_ALIASES
-        cbb_teams = ['uconn', 'purdue', 'tennessee', 'arizona', 'gonzaga', 'duke', 
-                     'kansas', 'baylor', 'villanova', 'texas', 'kentucky', 'ucla', 
-                     'unc', 'creighton', 'marquette', 'xavier', 'notre dame',
-                     'wichita state', 'san diego state', 'memphis', 'cincinnati',
-                     'connecticut', 'houston', 'nevada', 'utah state']
+        cbb_teams = [
+            'uconn', 'purdue', 'tennessee', 'arizona', 'gonzaga', 'duke', 
+            'kansas', 'baylor', 'villanova', 'texas', 'kentucky', 'ucla', 
+            'unc', 'creighton', 'marquette', 'xavier', 'notre dame',
+            'wichita state', 'san diego state', 'memphis', 'cincinnati',
+            'connecticut', 'houston', 'nevada', 'utah state', 'arizona state',
+            'florida', 'alabama', 'arkansas', 'auburn', 'georgia', 'lsu',
+            'mississippi state', 'ole miss', 'south carolina', 'tennessee',
+            'vanderbilt', 'oklahoma', 'texas a&m', 'west virginia',
+            'iowa state', 'kansas state', 'oklahoma state', 'baylor',
+            'tcu', 'byu', 'cincinnati', 'houston', 'ucf', 'byu',
+            'smu', 'tulane', 'tulsa', 'east carolina', 'temple',
+            'washington', 'washington state', 'oregon', 'oregon state',
+            'stanford', 'cal', 'ucla', 'usc', 'arizona', 'arizona state',
+            'colorado', 'utah', 'oregon', 'ucla', 'southern california',
+            'saint louis', 'dayton', 'saint josephs', 'la salle',
+            'richmond', 'george washington', 'duquesne', 'fordham',
+            'massachusetts', 'st bonaventure', 'rhode island',
+            'virginia tech', 'virginia', 'north carolina', 'duke',
+            'louisville', 'syracuse', 'pittsburgh', 'rutgers',
+            'seton hall', 'st johns', 'providence', 'villanova',
+            'marquette', 'creighton', 'xavier', 'butler', 'georgetown',
+            'depaul', 'st johns', 'seton hall', ' providence',
+            'fairfield', 'manhattan', 'iona', 'siena', 'monmouth',
+            'niagara', 'canisius', 'marist', 'quinnipiac',
+        ]
         for team in cbb_teams:
             if team in text:
                 return 'cbb'
