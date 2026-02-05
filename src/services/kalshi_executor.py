@@ -34,6 +34,8 @@ class KalshiCopyConfig:
     max_trade_percent: float = 2.0
     max_total_exposure: float = 30.0
     max_positions_per_market: int = 1
+    max_position_size_per_market: float = 27.0  # Dollar limit per market side
+    max_position_size_total: float = 108.0  # Dollar limit total exposure
     max_same_side_per_market: int = 1
     max_trades_per_hour: int = 10
     max_trades_per_day: int = 50
@@ -67,6 +69,8 @@ class KalshiCopyConfig:
             max_trade_percent=float(os.getenv("KALSHI_MAX_TRADE_PERCENT", "5.0")),
             max_total_exposure=float(os.getenv("KALSHI_MAX_TOTAL_EXPOSURE", "30.0")),
             max_positions_per_market=int(os.getenv("MAX_POSITIONS_PER_MARKET", "1")),
+            max_position_size_per_market=float(os.getenv("MAX_POSITION_SIZE_PER_MARKET", "27.0")),
+            max_position_size_total=float(os.getenv("MAX_POSITION_SIZE_TOTAL", "108.0")),
             max_same_side_per_market=int(os.getenv("MAX_SAME_SIDE_PER_MARKET", "1")),
             max_trades_per_hour=int(os.getenv("MAX_TRADES_PER_HOUR", "15")),
             max_trades_per_day=int(os.getenv("MAX_TRADES_PER_DAY", "50")),
@@ -185,24 +189,31 @@ class KalshiExecutor:
                 json.dump([], f)
 
     def _load_positions(self):
-        """Load existing positions from trade log."""
+        """Load existing positions from trade log.
+        
+        Tracks DOLLAR amounts per market, not counts.
+        """
         try:
             with open(TRADE_LOG, 'r') as f:
                 trades = json.load(f)
         except:
             trades = []
 
-        self.positions_by_market: Dict[str, int] = {}
-        self.positions_by_side: Dict[str, int] = {}
+        # Track DOLLARS per market (game_key)
+        self.positions_by_market: Dict[str, float] = {}
+        # Track DOLLARS per market + side (game_key:side)
+        self.positions_by_side: Dict[str, float] = {}
 
         for t in trades:
             game_key = t.get('game_key', '')
             side = t.get('kalshi_side', '')
-            if game_key:
-                self.positions_by_market[game_key] = self.positions_by_market.get(game_key, 0) + 1
+            size = float(t.get('position_size', 0))
+            
+            if game_key and size > 0:
+                self.positions_by_market[game_key] = self.positions_by_market.get(game_key, 0.0) + size
                 if side:
                     key = f"{game_key}:{side}"
-                    self.positions_by_side[key] = self.positions_by_side.get(key, 0) + 1
+                    self.positions_by_side[key] = self.positions_by_side.get(key, 0.0) + size
 
     def _load_markets(self):
         """Load Kalshi markets if not already loaded."""
@@ -253,14 +264,18 @@ class KalshiExecutor:
                 kalshi_market=None,
                 position_size=0,
                 side="",
-                error="No matching Kalshi market found"
+                error=f"No Kalshi market for {pm_trade.market_type} ({pm_trade.teams[0]}-{pm_trade.teams[1]})"
             )
 
-        # Check position limits
+        # Check position limits (DOLLAR-based)
         market_key = match.game_key
         side_key = f"{market_key}:{match.kalshi_side}"
+        max_per_market = self.config.max_position_size_per_market  # $27 default
+        max_total = self.config.max_position_size_total  # $108 default
+        current_total = sum(self.positions_by_market.values())
+        current_on_side = self.positions_by_side.get(side_key, 0.0)
 
-        if self.positions_by_market.get(market_key, 0) >= self.config.max_positions_per_market:
+        if current_on_side >= max_per_market:
             return TradeResult(
                 success=False,
                 trade_id=None,
@@ -268,10 +283,10 @@ class KalshiExecutor:
                 kalshi_market=match,
                 position_size=0,
                 side=match.kalshi_side,
-                error=f"Max {self.config.max_positions_per_market} position(s) per market reached"
+                error=f"Max ${max_per_market:.2f} on {side_key} (have ${current_on_side:.2f})"
             )
 
-        if self.positions_by_side.get(side_key, 0) >= self.config.max_same_side_per_market:
+        if current_total >= max_total:
             return TradeResult(
                 success=False,
                 trade_id=None,
@@ -279,11 +294,16 @@ class KalshiExecutor:
                 kalshi_market=match,
                 position_size=0,
                 side=match.kalshi_side,
-                error=f"Max {self.config.max_same_side_per_market} same-side bet(s) per market reached"
+                error=f"Max ${max_total:.2f} total exposure (have ${current_total:.2f})"
             )
 
         # Calculate position size using whale's avg
         position_size = self.calculate_position_size(pm_trade)
+
+        # Cap by remaining budget for this side
+        remaining = max_per_market - current_on_side
+        if position_size > remaining:
+            position_size = remaining
 
         if position_size < 1.0:
             return TradeResult(
@@ -293,7 +313,7 @@ class KalshiExecutor:
                 kalshi_market=match,
                 position_size=position_size,
                 side=match.kalshi_side,
-                error=f"Position too small: ${position_size:.2f}"
+                error=f"Position too small after cap: ${position_size:.2f}"
             )
 
         # Execute trade (or dry run)
@@ -304,11 +324,11 @@ class KalshiExecutor:
             print(f"  PM: {pm_trade_data.get('market', {}).get('title', 'Unknown')}")
             print(f"  Kalshi: {match.kalshi_market_title}")
             print(f"  Side: {match.kalshi_side}")
-            print(f"  Size: ${position_size:.2f}")
+            print(f"  Size: ${position_size:.2f} (remaining: ${remaining:.2f})")
             # Update position tracking for dry-run too
-            self.positions_by_market[match.game_key] = self.positions_by_market.get(match.game_key, 0) + 1
+            self.positions_by_market[match.game_key] = self.positions_by_market.get(match.game_key, 0.0) + position_size
             side_key = f"{match.game_key}:{match.kalshi_side}"
-            self.positions_by_side[side_key] = self.positions_by_side.get(side_key, 0) + 1
+            self.positions_by_side[side_key] = self.positions_by_side.get(side_key, 0.0) + position_size
             return TradeResult(
                 success=True,
                 trade_id=f"dry_{int(time.time())}",
@@ -388,14 +408,19 @@ class KalshiExecutor:
         with open(TRADE_LOG, 'w') as f:
             json.dump(trades, f, indent=2)
 
-        # Update position tracking
-        self.positions_by_market[match.game_key] = self.positions_by_market.get(match.game_key, 0) + 1
+        # Update position tracking (DOLLAR-based)
+        self.positions_by_market[match.game_key] = self.positions_by_market.get(match.game_key, 0.0) + size
         side_key = f"{match.game_key}:{match.kalshi_side}"
-        self.positions_by_side[side_key] = self.positions_by_side.get(side_key, 0) + 1
+        self.positions_by_side[side_key] = self.positions_by_side.get(side_key, 0.0) + size
 
-    def process_whale_trades(self, whale_trades: List[dict]) -> List[TradeResult]:
-        """Process a batch of whale trades."""
-        results = []
+    def process_whale_trades(self, whale_trades: List[dict]) -> tuple:
+        """Process a batch of whale trades.
+        
+        Returns: (executed_trades: List[TradeResult], skipped_trades: List[dict])
+        Each skipped trade dict contains: {'trade': dict, 'reason': str}
+        """
+        executed = []
+        skipped = []
 
         # Update whale analyzer
         self.whale_analyzer.add_trades(whale_trades)
@@ -404,18 +429,32 @@ class KalshiExecutor:
             # Parse PM trade
             pm_trade = self.matcher.parse_pm_trade(trade_data)
             if not pm_trade:
+                skipped.append({
+                    'trade': trade_data,
+                    'reason': 'Failed to parse PM trade'
+                })
                 continue
 
             # Skip if we already traded this market recently
             if self._recently_traded(pm_trade):
+                skipped.append({
+                    'trade': trade_data,
+                    'reason': f'Recently traded ({pm_trade.teams[0]}-{pm_trade.teams[1]})'
+                })
                 continue
 
             # Execute copy trade
             result = self.execute_copy_trade(trade_data, pm_trade)
             if result.success:
-                results.append(result)
+                executed.append(result)
+            else:
+                reason = result.error or 'Unknown error'
+                skipped.append({
+                    'trade': trade_data,
+                    'reason': reason
+                })
 
-        return results
+        return executed, skipped
 
     def _recently_traded(self, pm_trade: PMTradeData, cooldown_minutes: int = 30) -> bool:
         """Check if we recently traded this market."""

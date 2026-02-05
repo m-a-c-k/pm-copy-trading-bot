@@ -63,6 +63,18 @@ class MarketMatcher:
         # Baseball
         "mlb": "mlb",
         "baseball": "mlb",
+        # Soccer
+        "soccer": "soccer",
+        "premier": "soccer",
+        "la liga": "soccer",
+        "serie a": "soccer",
+        "bundesliga": "soccer",
+        "ligue 1": "soccer",
+        "fc": "soccer",
+        "united": "soccer",
+        "city": "soccer",
+        "rangers": "soccer",
+        "celtic": "soccer",
         # Combat
         "ufc": "ufc",
         "mma": "ufc",
@@ -84,7 +96,8 @@ class MarketMatcher:
     SPREAD_PATTERNS = [
         r'spread',
         r'wins by',
-        r' - \d+\.?\d*',
+        r' -\d+\.?\d*',  # "Team -2.5"
+        r' \+\d+\.?\d*',  # "Team +2.5"
     ]
 
     TOTAL_PATTERNS = [
@@ -231,15 +244,57 @@ class MarketMatcher:
             return 'cfb'
         elif 'nhl' in slug:
             return 'nhl'
+        elif 'premier' in slug or 'laliga' in slug or 'serie-a' in slug or 'bundesliga' in slug:
+            return 'soccer'
+        elif 'epl' in slug or 'pl' in slug:
+            return 'soccer'
 
         return ""  # Empty = not a sports market
 
     def _extract_teams(self, title: str, slug: str, sport: str) -> Tuple[str, str]:
-        """Extract team abbreviations from title or slug."""
-        # Try slug first: "nhl-tor-cal-2026-01-17" → ("tor", "cal")
+        """Extract team abbreviations from title or slug.
+
+        For spread markets like "Knicks (-5.5)", extract the team being bet on from title,
+        not both teams from slug.
+        """
+        title_lower = title.lower()
+        slug_lower = slug.lower()
+
+        # For spread markets: extract the specific team being bet on from title
+        if 'spread' in title_lower or self._detect_market_type(title_lower) == 'spread':
+            # Find team mentioned in spread title like "Knicks (-5.5)" or "Timberwolves (-1.5)"
+            bet_team_code = None
+            for canonical, aliases in self._get_team_aliases(sport).items():
+                for alias in aliases:
+                    if alias in title_lower:
+                        # Found a team being bet on
+                        # Find the 3-letter code from the aliases set
+                        for code in aliases:
+                            if len(code) == 3:
+                                bet_team_code = code.lower()
+                                break
+                        if bet_team_code:
+                            break
+                if bet_team_code:
+                    break
+
+            if bet_team_code:
+                # For spread markets, we only care about the team being bet on
+                # Get opponent from slug: "nba-den-nyk-..." with bet_team='nyk' → opponent='den'
+                parts = slug_lower.split('-')
+                if len(parts) >= 3:
+                    for part in parts[1:3]:  # Check team codes from slug
+                        if part.lower() != bet_team_code and len(part) >= 2 and len(part) <= 4:
+                            # Found opponent
+                            return (bet_team_code[:3], part[:3])
+
+                # Fallback: return bet_team with empty string for opponent
+                return (bet_team_code[:3], '')
+
+        # For non-spread markets: Try slug first: "nhl-tor-cal-2026-01-17" → ("tor", "cal")
         extracted_teams = None
         if slug:
-            parts = slug.lower().split('-')
+            parts = slug_lower.split('-')
             if len(parts) >= 3:
                 team1 = parts[1].lower()
                 team2 = parts[2].lower()
@@ -372,23 +427,38 @@ class MarketMatcher:
         """Detect market type from title."""
         title_lower = title.lower()
 
-        if any(p in title_lower for p in self.SPREAD_PATTERNS):
-            return 'spread'
-        elif any(p in title_lower for p in self.TOTAL_PATTERNS):
-            return 'total'
-        elif any(p in title_lower for p in self.WINNER_PATTERNS):
-            return 'winner'
+        # Use regex matching for spread patterns
+        for pattern in self.SPREAD_PATTERNS:
+            if re.search(pattern, title_lower):
+                return 'spread'
+        
+        # Use regex matching for total patterns  
+        for pattern in self.TOTAL_PATTERNS:
+            if re.search(pattern, title_lower):
+                return 'total'
+        
+        # Use regex matching for winner patterns
+        for pattern in self.WINNER_PATTERNS:
+            if re.search(pattern, title_lower):
+                return 'winner'
 
         return 'winner'
 
-    def _extract_line(self, title: str, market_type: str) -> Optional[float]:
-        """Extract line number (spread or total) from title."""
+    def _extract_line(self, title: str, market_type: str, market_id: str = "") -> Optional[float]:
+        """Extract line number (spread or total) from title or ID."""
         if market_type not in ('spread', 'total'):
             return None
 
+        # Try title first
         match = re.search(r'([-+]?\d+\.?\d*)', title)
         if match:
             return float(match.group(1))
+
+        # For Kalshi totals/spreads, line is often in the ID (e.g., "KXNBATOTAL-26FEB04BOSHOU-231")
+        if market_id:
+            id_match = re.search(r'-(\d+\.?\d*)$', market_id)
+            if id_match:
+                return float(id_match.group(1))
 
         return None
 
@@ -407,16 +477,9 @@ class MarketMatcher:
         return None
 
     def find_match(self, pm_trade: PMTradeData) -> Optional[MarketMatch]:
-        """
-        Find matching Kalshi market for a PM trade.
+        """Find matching Kalshi market for PM trade."""
 
-        Args:
-            pm_trade: Parsed PM trade data
-
-        Returns:
-            MarketMatch or None if no match found
-        """
-        if pm_trade.sport == 'unknown' or not pm_trade.teams[0]:
+        if not pm_trade.sport:
             return None
 
         sport = pm_trade.sport
@@ -433,23 +496,17 @@ class MarketMatcher:
 
         # Try exact game key first
         if game_key in sport_markets:
-            return self._find_best_match(
+            match = self._find_best_match(
                 sport_markets[game_key],
                 pm_trade,
                 confidence=1.0,
                 match_type='exact'
             )
+            if match:
+                return match
 
-        # Try fuzzy team matching
-        for ks_game_key, ks_markets in sport_markets.items():
-            if self._teams_match(team1, team2, ks_game_key):
-                return self._find_best_match(
-                    ks_markets,
-                    pm_trade,
-                    confidence=0.8,
-                    match_type='fuzzy'
-                )
-
+        # DISABLED: Fuzzy matching causing false positives with unrelated games
+        # Only use exact game keys for now
         return None
 
     def _build_game_key(self, team1: str, team2: str) -> str:
@@ -487,17 +544,35 @@ class MarketMatcher:
 
         for ks_market in ks_markets:
             ks_title = ks_market.get('title', '').lower()
+            ks_market_id = ks_market.get('id', '')
 
             # Use stored market type (from _build_index)
             ks_market_type = ks_market.get('market_type', 'winner')
             if ks_market_type != pm_trade.market_type:
                 continue
 
-            # For spreads/totals, match line number
+            # For spread markets: ensure we match the team being bet on
+            if pm_trade.market_type == 'spread' and len(pm_trade.teams) >= 1:
+                bet_team = pm_trade.teams[0].lower()
+                # Check if Kalshi market mentions the team being bet on
+                # For "Knicks (-5.5)", bet_team='nyk', we need market mentioning Knicks
+                team_mentioned = False
+                for team in [bet_team]:
+                    if team in ks_title:
+                        team_mentioned = True
+                        break
+                if not team_mentioned:
+                    # Skip this market - it's for the opponent, not the bet team
+                    continue
+
+            # For spreads/totals, match line number (allow 1.0 point tolerance)
+            # For spreads, PM uses negative/positive (e.g., -2.5) while Kalshi uses positive (2.5)
             if pm_trade.market_type in ('spread', 'total'):
-                ks_line = self._extract_line(ks_title, ks_market_type)
+                ks_line = self._extract_line(ks_title, ks_market_type, ks_market_id)
                 if ks_line is not None and pm_trade.line is not None:
-                    if abs(ks_line - pm_trade.line) > 0.1:
+                    # For spreads, use absolute values for comparison
+                    pm_line_abs = abs(pm_trade.line) if pm_trade.market_type == 'spread' else pm_trade.line
+                    if abs(ks_line - pm_line_abs) > 1.0:
                         continue
 
             # Determine side (YES = team wins, NO = team loses)

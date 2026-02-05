@@ -44,7 +44,7 @@ def fetch_whale_trades(wallet_address: str, limit: int = 20) -> list:
                 "status": "open"
             },
             headers={"User-Agent": "Mozilla/5.0"},
-            timeout=10
+            timeout=30  # Increased from 10 to 30 seconds
         )
         if resp.ok:
             data = resp.json()
@@ -190,8 +190,19 @@ def main():
                     print(f"  ↪ Skipped {len(non_sports_trades)} non-sports markets")
 
                 results = executor.process_whale_trades(sports_trades)
-                success_count = sum(1 for r in results if r.success)
-                print(f"  → Copied {success_count}/{len(results)} trades to Kalshi")
+                executed, skipped = results
+                success_count = len(executed)
+                
+                # Print verbose info about skipped trades
+                if skipped:
+                    print(f"\n  ↪ Skipped {len(skipped)} trades:")
+                    for s in skipped:
+                        market_title = s['trade'].get('market', {}).get('title', 'Unknown')
+                        reason = s['reason']
+                        print(f"    ⏭️ {market_title[:45]}...")
+                        print(f"       Reason: {reason}")
+                
+                print(f"  → Copied {success_count}/{len(sports_trades)} trades to Kalshi")
             else:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] Scanning... ({scan_count} scans, {len(seen_trades)} seen) ", end="\r")
 
