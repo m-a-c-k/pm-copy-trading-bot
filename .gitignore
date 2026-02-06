@@ -6,3 +6,6 @@ venv/
 .env.example
 data/trades/*
 !data/traders/.gitkeep
+.env
+.env.pm
+.env.local
