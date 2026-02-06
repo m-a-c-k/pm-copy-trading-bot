@@ -242,9 +242,15 @@ class PolymarketCopyExecutor:
             print(f"   ⚠️  Too small (${our_size:.2f}), skipping")
             return {"success": False, "error": "Size too small"}
             
-        # Check exposure limits
+        # Check per-market position limit (like Kalshi's $27 per market side)
+        current_position = self.positions.get(token_id, 0)
+        if current_position + our_size > self.config.max_position_size * 2:  # Allow up to 2x max per market
+            print(f"   ⚠️  Max position for this market reached (${current_position:.2f})")
+            return {"success": False, "error": "Max market position"}
+        
+        # Check total exposure limit
         if self.total_exposure + our_size > self.config.max_total_exposure:
-            print(f"   ⚠️  Max exposure reached (${self.total_exposure:.2f})")
+            print(f"   ⚠️  Max total exposure reached (${self.total_exposure:.2f})")
             return {"success": False, "error": "Max exposure"}
         
         if self.config.dry_run:
