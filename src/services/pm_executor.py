@@ -224,16 +224,15 @@ class PolymarketCopyExecutor:
         if not self.config.enabled or not self.client:
             return {"success": False, "error": "PM trading disabled"}
             
-        # Extract trade info - try multiple sources for title
-        market = trade_data.get("market", {})
-        title = (market.get("title") or 
-                trade_data.get("title") or 
-                trade_data.get("question") or 
-                market.get("question", "Unknown"))
-        token_id = trade_data.get("tokenId") or trade_data.get("clobTokenId", "")
+        # Extract trade info - API returns flat structure
+        title = trade_data.get("title", "Unknown")
+        slug = trade_data.get("slug", "")
+        outcome = trade_data.get("outcome", trade_data.get("name", "yes"))
         side = trade_data.get("side", "buy").lower()
-        outcome = trade_data.get("outcome", "yes").lower()
-        whale_size = float(trade_data.get("amount") or trade_data.get("size", 0))
+        whale_size = float(trade_data.get("usdcSize") or trade_data.get("size", 0))
+        
+        # Get token ID from conditionId or asset
+        token_id = trade_data.get("asset") or trade_data.get("conditionId") or ""
         
         # Get trader attribution
         trader = trade_data.get("_trader_address", "unknown")[:10]

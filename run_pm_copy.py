@@ -46,7 +46,12 @@ def fetch_whale_trades(wallet_address: str, limit: int = 20) -> list:
         )
         if resp.ok:
             data = resp.json()
-            return data.get("activity", []) if isinstance(data, dict) else data
+            # Handle both list and dict formats
+            if isinstance(data, list):
+                return data
+            elif isinstance(data, dict):
+                return data.get("activity", []) or data.get("data", []) or []
+            return []
     except Exception as e:
         print(f"Error fetching whale trades: {e}")
     return []
