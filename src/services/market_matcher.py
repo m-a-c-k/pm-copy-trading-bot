@@ -545,9 +545,12 @@ class MarketMatcher:
         return None
 
     def _build_game_key(self, team1: str, team2: str) -> str:
-        """Build normalized game key from teams."""
-        t1 = team1.lower().strip()
-        t2 = team2.lower().strip()
+        """Build normalized game key from teams using canonical names."""
+        from src.services.team_mappings import get_canonical
+        
+        # Normalize to canonical names
+        t1 = get_canonical(team1.lower().strip()) or team1.lower().strip()
+        t2 = get_canonical(team2.lower().strip()) or team2.lower().strip()
         return '-'.join(sorted([t1, t2]))
 
     def _teams_match(self, pm_team1: str, pm_team2: str, ks_game_key: str) -> bool:

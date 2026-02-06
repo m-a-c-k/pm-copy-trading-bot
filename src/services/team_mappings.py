@@ -69,12 +69,13 @@ TEAM_ALIASES: Dict[str, Set[str]] = {
     "tampa bay buccaneers": {"tampa bay", "tb", "buccaneers"},
     "tennessee titans": {"tennessee", "ten", "titans"},
     "washington commanders": {"washington", "wsh", "commanders"},
-    # NHL Teams - Using 3-letter codes as canonical for matching
+    # NHL Teams - Kalshi uses specific 3-letter codes
+    # Canonical is Kalshi's code, aliases are what PM might use
     "cgy": {"calgary", "cgy", "flames", "cal"},
     "edm": {"edmonton", "edm", "oilers"},
     "van": {"vancouver", "van", "canucks"},
-    "vgk": {"vegas", "vgk", "golden knights"},
-    "lak": {"los angeles kings", "la", "lak", "kings", "los angeles"},
+    "vgk": {"vegas", "vgk", "golden knights", "las", "vegas golden knights"},
+    "lav": {"los angeles kings", "la", "lak", "kings", "los angeles", "lav", "lAK"},
     "sea": {"seattle", "sea", "kraken"},
     "dal": {"dallas", "dal", "stars"},
     "stl": {"st. louis", "stl", "blues"},
