@@ -17,6 +17,8 @@ from typing import Optional, Dict, Any
 from datetime import datetime
 from dotenv import load_dotenv
 import httpx
+from web3 import Web3
+from eth_account import Account
 
 load_dotenv()
 
@@ -110,6 +112,19 @@ class PMClient:
             print(f"Error getting balance: {e}")
         return 0.0
     
+    def _sign_order_eip712(self, order_data: dict) -> str:
+        """Sign order using EIP-712 for PM CLOB."""
+        from eth_account import Account
+        
+        # Create order hash
+        order_hash = Web3.keccak(text=json.dumps(order_data, sort_keys=True))
+        
+        # Sign with private key
+        account = Account.from_key(self.config.private_key)
+        signed = account.sign_message(order_hash)
+        
+        return signed.signature.hex()
+    
     async def place_order(
         self, 
         token_id: str, 
@@ -117,14 +132,58 @@ class PMClient:
         size: float, 
         price: float
     ) -> Dict[str, Any]:
-        """Place an order on PM CLOB."""
-        # TODO: Implement actual order signing and placement
-        # This requires EIP-712 signing with private key
-        return {
-            "success": True,
-            "order_id": f"test_{int(time.time())}",
-            "status": "DRY_RUN"
-        }
+        """Place an order on PM CLOB with Builder auth."""
+        import time
+        
+        try:
+            # Get current timestamp
+            timestamp = str(int(time.time()))
+            
+            # Create order payload
+            order_data = {
+                "tokenId": token_id,
+                "side": side.lower(),
+                "size": str(size),
+                "price": str(price),
+                "timestamp": timestamp,
+                "maker": self.config.wallet_address.lower(),
+                "taker": "0x0000000000000000000000000000000000000000"
+            }
+            
+            # Sign the order
+            signature = self._sign_order_eip712(order_data)
+            order_data["signature"] = signature
+            
+            # Submit to CLOB
+            body = json.dumps(order_data)
+            headers = self._get_headers("POST", "/order", body)
+            
+            resp = await self.session.post(
+                f"{self.CLOB_URL}/order",
+                json=order_data,
+                headers=headers
+            )
+            
+            if resp.status_code == 200:
+                return {
+                    "success": True,
+                    "order_id": resp.json().get("orderId", "unknown"),
+                    "status": "SUBMITTED",
+                    "response": resp.json()
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": f"HTTP {resp.status_code}: {resp.text}",
+                    "status": "FAILED"
+                }
+                
+        except Exception as e:
+            return {
+                "success": False,
+                "error": str(e),
+                "status": "ERROR"
+            }
     
     async def close(self):
         await self.session.aclose()
