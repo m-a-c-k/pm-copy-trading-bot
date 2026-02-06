@@ -589,15 +589,8 @@ class MarketMatcher:
             # For spread markets: ensure we match the team being bet on
             if pm_trade.market_type == 'spread' and len(pm_trade.teams) >= 1:
                 bet_team = pm_trade.teams[0].lower()
-                # Check if Kalshi market mentions the team being bet on
-                # For "Knicks (-5.5)", bet_team='nyk', we need market mentioning Knicks
-                team_mentioned = False
-                for team in [bet_team]:
-                    if team in ks_title:
-                        team_mentioned = True
-                        break
-                if not team_mentioned:
-                    # Skip this market - it's for the opponent, not the bet team
+                # Use _team_mentioned_in_title to check ALL aliases
+                if not self._team_mentioned_in_title(bet_team, ks_title):
                     continue
 
             # For spreads/totals, match line number (allow 1.0 point tolerance)
@@ -671,17 +664,30 @@ class MarketMatcher:
         return pm_trade.side
 
     def _team_mentioned_in_title(self, team: str, title: str) -> bool:
-        """Check if team is mentioned in market title."""
-        # Try canonical name matching
-        canonical = get_canonical(team)
-        if canonical:
-            canonical_lower = canonical.lower()
-            if canonical_lower in title:
-                return True
+        """Check if team is mentioned in market title - check ALL aliases."""
+        from src.services.team_mappings import TEAM_ALIASES
 
-        # Try direct match
-        if team.lower() in title:
+        team_lower = team.lower()
+        title_lower = title.lower()
+
+        if team_lower in title_lower:
             return True
+
+        canonical = get_canonical(team)
+        if canonical and canonical.lower() in title_lower:
+            return True
+
+        if canonical and canonical in TEAM_ALIASES:
+            for alias in TEAM_ALIASES[canonical]:
+                if alias.lower() in title_lower:
+                    return True
+
+        for canonical_name, aliases in TEAM_ALIASES.items():
+            for alias in aliases:
+                if alias.lower() == team_lower:
+                    for a2 in aliases:
+                        if a2.lower() in title_lower:
+                            return True
 
         return False
 
