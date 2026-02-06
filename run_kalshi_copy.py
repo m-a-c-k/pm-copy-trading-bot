@@ -142,6 +142,9 @@ def main():
             all_trades = []
             for trader in traders:
                 trades = fetch_whale_trades(trader, limit=20)
+                # Tag each trade with the trader address
+                for t in trades:
+                    t['_trader_address'] = trader
                 all_trades.extend(trades)
 
             new_trades = []
