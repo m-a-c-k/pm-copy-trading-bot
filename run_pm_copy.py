@@ -52,15 +52,6 @@ async def main():
     # Check if live trading enabled
     dry_run = os.getenv("PM_DRY_RUN", "true").lower() == "true"
     
-    if not dry_run:
-        print("\n⚠️  LIVE TRADING MODE!")
-        print("Wallet: 0xd4549c366965829bde8efdae823ff767f250b47f")
-        print("This will use real USDC to place orders!")
-        confirm = input("\nType 'LIVE' to confirm: ")
-        if confirm != "LIVE":
-            print("Cancelled - running in dry run mode")
-            dry_run = True
-    
     # Initialize executor
     config = PMCopyConfig.from_env()
     config.dry_run = dry_run
