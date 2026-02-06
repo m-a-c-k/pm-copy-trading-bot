@@ -21,17 +21,27 @@ from src.config.traders import get_active_traders
 from src.services.pm_executor import PolymarketCopyExecutor, PMCopyConfig
 
 POLYMARKET_ACTIVITY_API = "https://data-api.polymarket.com/activity"
-FETCH_INTERVAL = 3
+FETCH_INTERVAL = 15  # Slower polling to avoid Cloudflare
 
 
 def fetch_whale_trades(wallet_address: str, limit: int = 20) -> list:
     """Fetch recent trades from a specific wallet."""
     import requests
     try:
+        # Browser-like headers to avoid Cloudflare detection
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
+            "Origin": "https://polymarket.com",
+            "Referer": "https://polymarket.com/",
+            "Connection": "keep-alive",
+        }
         resp = requests.get(
             POLYMARKET_ACTIVITY_API,
             params={"user": wallet_address, "limit": limit, "status": "open"},
-            headers={"User-Agent": "Mozilla/5.0"},
+            headers=headers,
             timeout=30
         )
         if resp.ok:
@@ -79,18 +89,38 @@ async def main():
     # Main loop
     seen_trades = set()
     scan_count = 0
+    error_count = 0
+    max_errors = 5
+    base_delay = FETCH_INTERVAL
     
     try:
         while True:
             scan_count += 1
             all_trades = []
+            fetch_success = True
             
             # Fetch trades from all traders
             for trader in traders:
-                trades = fetch_whale_trades(trader, limit=20)
-                for t in trades:
-                    t['_trader_address'] = trader
-                all_trades.extend(trades)
+                try:
+                    trades = fetch_whale_trades(trader, limit=20)
+                    for t in trades:
+                        t['_trader_address'] = trader
+                    all_trades.extend(trades)
+                except Exception as e:
+                    fetch_success = False
+                    error_count += 1
+                    if error_count >= max_errors:
+                        print(f"\n⚠️  Too many API errors ({error_count}), backing off...")
+                        # Exponential backoff
+                        delay = min(base_delay * (2 ** (error_count - max_errors)), 300)  # Max 5 min
+                        print(f"   Waiting {delay}s before retry...")
+                        await asyncio.sleep(delay)
+                        error_count = 0  # Reset after backoff
+                    continue
+            
+            # Reset error count on success
+            if fetch_success:
+                error_count = max(0, error_count - 1)
             
             # Filter new trades
             new_trades = []
@@ -120,7 +150,10 @@ async def main():
             else:
                 print(f"[{datetime.now().strftime('%H:%M:%S')}] Scanning... ({scan_count} scans, {len(seen_trades)} seen)", end="\r")
             
-            await asyncio.sleep(FETCH_INTERVAL)
+            # Add jitter to avoid detection
+            import random
+            jitter = random.uniform(0.5, 1.5)
+            await asyncio.sleep(FETCH_INTERVAL * jitter)
             
     except KeyboardInterrupt:
         print("\n\nStopping PM Copy Bot...")
