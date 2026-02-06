@@ -115,13 +115,18 @@ class PMClient:
     def _sign_order_eip712(self, order_data: dict) -> str:
         """Sign order using EIP-712 for PM CLOB."""
         from eth_account import Account
+        from eth_account.messages import encode_defunct
         
         # Create order hash
-        order_hash = Web3.keccak(text=json.dumps(order_data, sort_keys=True))
+        order_str = json.dumps(order_data, sort_keys=True)
+        order_hash = Web3.keccak(text=order_str)
+        
+        # Create signable message
+        signable_msg = encode_defunct(primitive=order_hash)
         
         # Sign with private key
         account = Account.from_key(self.config.private_key)
-        signed = account.sign_message(order_hash)
+        signed = account.sign_message(signable_msg)
         
         return signed.signature.hex()
     
@@ -219,9 +224,12 @@ class PolymarketCopyExecutor:
         if not self.config.enabled or not self.client:
             return {"success": False, "error": "PM trading disabled"}
             
-        # Extract trade info
+        # Extract trade info - try multiple sources for title
         market = trade_data.get("market", {})
-        title = market.get("title", "Unknown")
+        title = (market.get("title") or 
+                trade_data.get("title") or 
+                trade_data.get("question") or 
+                market.get("question", "Unknown"))
         token_id = trade_data.get("tokenId") or trade_data.get("clobTokenId", "")
         side = trade_data.get("side", "buy").lower()
         outcome = trade_data.get("outcome", "yes").lower()
@@ -235,8 +243,14 @@ class PolymarketCopyExecutor:
         print(f"   Whale: ${whale_size:.2f}")
         print(f"   Side: {side} {outcome}")
         
-        # Calculate position size (10% of whale, max $50)
-        our_size = min(whale_size * 0.1, self.config.max_position_size)
+        # Calculate position size using relative sizing like Kalshi
+        # our_size = whale_size * relative_factor, capped at limits
+        relative_factor = 0.05  # Copy 5% of whale's position (more conservative for PM)
+        our_size = whale_size * relative_factor
+        
+        # Apply limits
+        our_size = min(our_size, self.config.max_position_size)  # Max per trade
+        our_size = max(our_size, 0.50)  # Minimum $0.50 to avoid dust
         
         if our_size < 1.0:
             print(f"   ⚠️  Too small (${our_size:.2f}), skipping")
