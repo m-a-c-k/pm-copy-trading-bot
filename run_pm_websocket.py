@@ -42,14 +42,13 @@ class PMWebSocketBot:
             async with websockets.connect(RTDS_URL) as ws:
                 print(f"✓ Connected to RTDS")
                 
-                # Subscribe to activity feed
+                # Subscribe to activity feed (correct format)
                 subscribe_msg = {
-                    "type": "subscribe",
+                    "action": "subscribe",
                     "subscriptions": [
                         {
                             "topic": "activity",
-                            "type": "trades",
-                            "filter": {}  # All trades
+                            "type": "trades"
                         }
                     ]
                 }
@@ -68,6 +67,9 @@ class PMWebSocketBot:
     async def handle_message(self, message):
         """Process incoming trade."""
         try:
+            # Skip empty messages
+            if not message:
+                return
             data = json.loads(message)
             
             # Check if it's a trade message
@@ -96,7 +98,7 @@ class PMWebSocketBot:
     async def process_trade(self, trade, trader):
         """Copy a whale trade."""
         title = trade.get("title", "Unknown")
-        size = float(trade.get("usdcSize", 0))
+        size = float(trade.get("size", 0))
         side = trade.get("side", "BUY")
         outcome = trade.get("outcome", "yes")
         
